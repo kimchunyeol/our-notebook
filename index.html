@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="우리 공책">
+<meta name="theme-color" content="#F2F4F8">
+<title>우리 둘의 공책</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root {
+  --paper: #F2F4F8; --sheet: #FFFFFF; --ink: #1E2640; --ink-soft: #5C6684;
+  --line: #DCE1EC; --pen: #3D4FB8; --pen-soft: #E6E9F8; --rose: #C2577A; --danger: #B3364A;
+  --f-letter: "Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
+  --f-ui: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12151F; --sheet: #1B2030; --ink: #E7EAF4; --ink-soft: #9AA3BF;
+    --line: #2C3347; --pen: #93A2F2; --pen-soft: #262D4A; --rose: #EE93B2; --danger: #F08A9A;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--f-ui); font-size: 15px; line-height: 1.6;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+[hidden] { display: none !important; }
+.wrap {
+  max-width: 680px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--f-letter); font-weight: 700; font-size: 1.9rem; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--ink-soft); font-size: 0.9rem; margin: 2px 0 0; }
+.who { font-size: 0.85rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; }
+
+.card { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--ink-soft); }
+.field input {
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  border-radius: 10px; padding: 10px 12px; font-family: var(--f-ui); font-size: 1rem;
+}
+.compose input.t, .compose textarea { width: 100%; border: 0; background: transparent; color: var(--ink); font-family: var(--f-letter); outline: none; }
+.compose input.t { font-size: 1.15rem; font-weight: 700; padding: 2px 0; }
+.compose textarea {
+  font-size: 1.05rem; line-height: 2rem; min-height: 8rem; resize: vertical;
+  background-image: linear-gradient(to bottom, transparent calc(2rem - 1px), var(--line) calc(2rem - 1px));
+  background-size: 100% 2rem; background-attachment: local;
+}
+.compose input.t::placeholder, .compose textarea::placeholder { color: var(--ink-soft); opacity: .7; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.count { font-size: 0.8rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+button { font-family: var(--f-ui); font-size: 0.9rem; font-weight: 500; cursor: pointer; border-radius: 999px; padding: 8px 18px; border: 1px solid transparent; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+.primary { background: var(--pen); color: var(--sheet); }
+.primary:disabled { opacity: .45; cursor: default; }
+.ghost { background: transparent; color: var(--ink-soft); border-color: var(--line); padding: 5px 12px; font-size: 0.8rem; }
+.ghost:hover { color: var(--ink); }
+.danger { color: var(--danger); }
+.err { color: var(--danger); font-size: 0.88rem; margin: 0; }
+
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { background: transparent; border-color: var(--line); color: var(--ink-soft); padding: 6px 14px; }
+.tabs button[aria-pressed="true"] { background: var(--pen-soft); color: var(--pen); border-color: transparent; }
+
+.day { font-size: 0.78rem; letter-spacing: 0.08em; color: var(--ink-soft); margin: 8px 0 -8px 2px; }
+.list { display: flex; flex-direction: column; gap: 14px; }
+.letter { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 14px 22px; position: relative; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.letter::before { content: ""; position: absolute; left: 10px; top: 16px; bottom: 16px; width: 2px; border-radius: 2px; background: var(--pen); }
+.letter.them::before { background: var(--rose); }
+.meta { font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; }
+.meta .name { color: var(--ink); font-weight: 500; }
+.letter h2 { font-family: var(--f-letter); font-size: 1.15rem; margin: 0; }
+.letter .body { font-family: var(--f-letter); font-size: 1.02rem; line-height: 1.95; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.replies { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.reply { font-size: 0.9rem; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reply .rn { font-weight: 500; margin-right: 6px; }
+.reply .rt { color: var(--ink-soft); font-size: 0.75rem; margin-left: 6px; }
+.reply-form { display: flex; gap: 8px; }
+.reply-form input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 7px 14px; font-family: var(--f-ui); font-size: 0.9rem; }
+.confirm { font-size: 0.85rem; color: var(--danger); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.empty { text-align: center; color: var(--ink-soft); padding: 32px 12px; font-family: var(--f-letter); font-size: 1.05rem; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 999px; font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>우리 둘의 공책</h1>
+      <p class="sub">하루 있었던 일, 하고 싶은 말을 적어 두면 서로 읽을 수 있어요.</p>
+    </div>
+    <div class="who" id="who" hidden><span id="meName"></span><button type="button" class="ghost" id="logout">나가기</button></div>
+  </header>
+
+  <!-- 1) 로그인 화면 -->
+  <form class="card" id="loginBox" hidden>
+    <label class="field">이메일<input id="email" type="email" autocomplete="username" required></label>
+    <label class="field">비밀번호<input id="pw" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="loginErr" hidden></p>
+    <button type="submit" class="primary">공책 열기</button>
+  </form>
+
+  <!-- 2) 처음 한 번: 이름 정하기 -->
+  <form class="card" id="nameBox" hidden>
+    <label class="field">공책에서 뭐라고 불러 드릴까요?<input id="nameIn" maxlength="20" placeholder="예: 소열" required></label>
+    <button type="submit" class="primary">이 이름으로 시작</button>
+  </form>
+
+  <!-- 3) 공책 -->
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:22px">
+    <form class="card compose" id="compose">
+      <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off">
+      <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요"></textarea>
+      <div class="row">
+        <span class="count" id="count">0 / 5000</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" class="ghost" id="cancelEdit" hidden>수정 취소</button>
+          <button type="submit" class="primary" id="saveBtn" disabled>남기기</button>
+        </div>
+      </div>
+    </form>
+    <div class="tabs" role="group" aria-label="보기">
+      <button type="button" data-f="all" aria-pressed="true">모두</button>
+      <button type="button" data-f="me" aria-pressed="false">내가 쓴 글</button>
+      <button type="button" data-f="them" aria-pressed="false">받은 글</button>
+    </div>
+    <div class="list" id="list"><div class="empty">공책을 펼치는 중이에요…</div></div>
+  </div>
+
+  <div class="card" id="setupMsg" hidden>
+    <p style="margin:0">아직 Firebase 설정이 들어가 있지 않아요. <b>index.html</b> 안의 <b>firebaseConfig</b> 부분을 채워 주세요. (설정방법.md 3단계)</p>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+// ================================================================
+//  ▼▼▼ 여기만 바꾸면 돼요 (설정방법.md 3단계) ▼▼▼
+//  Firebase 콘솔에서 복사한 내용을 그대로 붙여 넣으세요.
+// ================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyC3pbL5U-n6IHLCbDOHN6ARcCbuyJPuz70",
+  authDomain: "you-and-i-9996f.firebaseapp.com",
+  projectId: "you-and-i-9996f",
+  storageBucket: "you-and-i-9996f.firebasestorage.app",
+  messagingSenderId: "361166970139",
+  appId: "1:361166970139:web:f64cb0bfd3041aea0287be"
+};
+// ================================================================
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => ["loginBox", "nameBox", "app", "setupMsg"].forEach((x) => ($(x).hidden = x !== id));
+
+if (firebaseConfig.apiKey.startsWith("여기에")) { show("setupMsg"); throw new Error("firebaseConfig 미설정"); }
+
+const fb = initializeApp(firebaseConfig);
+const auth = getAuth(fb);
+const db = getFirestore(fb);
+setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+let me = null, people = {}, letters = [], replies = [], filter = "all";
+let editingId = null, confirmId = null, loaded = false, unsubs = [];
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2200); }
+const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : Date.now());
+const fmtDay = (m) => new Date(m).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+const fmtTime = (m) => new Date(m).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+const nameOf = (uid) => (people[uid] && people[uid].name) || (uid === me?.uid ? "나" : "그 사람");
+
+// ---- 로그인 ----
+$("loginBox").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginErr").hidden = true;
+  try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
+  catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
+});
+$("logout").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, (u) => {
+  unsubs.forEach((f) => f()); unsubs = [];
+  me = u; loaded = false; letters = []; replies = [];
+  if (!u) { $("who").hidden = true; show("loginBox"); return; }
+  $("who").hidden = false;
+  // 두 사람 이름 불러오기
+  unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
+    people = {}; snap.forEach((d) => (people[d.id] = d.data()));
+    $("meName").textContent = nameOf(u.uid) + " 님";
+    if (!people[u.uid]) show("nameBox"); else { show("app"); render(); }
+  }, denied));
+  unsubs.push(onSnapshot(query(collection(db, "letters"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
+    letters = snap.docs.map((d) => ({ id: d.id, ...d.data() })); loaded = true; render();
+  }, denied));
+  unsubs.push(onSnapshot(query(collection(db, "replies"), orderBy("createdAt", "asc"), limit(1000)), (snap) => {
+    replies = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render();
+  }, () => {}));
+});
+function denied() {
+  show("loginBox");
+  $("loginErr").textContent = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
+  $("loginErr").hidden = false;
+}
+
+$("nameBox").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const n = $("nameIn").value.trim(); if (!n) return;
+  try { await setDoc(doc(db, "people", me.uid), { name: n }); } catch (err) { toast("이름을 저장하지 못했어요."); }
+});
+
+// ---- 쓰기 ----
+const DRAFT = "our-notebook-draft";
+try { const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (d) { $("titleIn").value = d.t || ""; $("bodyIn").value = d.b || ""; } } catch (e) {}
+const saveDraft = () => { if (editingId) return; try { localStorage.setItem(DRAFT, JSON.stringify({ t: $("titleIn").value, b: $("bodyIn").value })); } catch (e) {} };
+function updateCount() { $("count").textContent = $("bodyIn").value.length + " / 5000"; $("saveBtn").disabled = !$("bodyIn").value.trim(); }
+$("bodyIn").addEventListener("input", () => { updateCount(); saveDraft(); });
+$("titleIn").addEventListener("input", saveDraft);
+updateCount();
+
+$("compose").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const title = $("titleIn").value.trim(), body = $("bodyIn").value.trim();
+  if (!body || !me) return;
+  $("saveBtn").disabled = true;
+  try {
+    if (editingId) {
+      await updateDoc(doc(db, "letters", editingId), { title, body, editedAt: serverTimestamp() });
+      toast("고쳤어요"); stopEdit();
+    } else {
+      await addDoc(collection(db, "letters"), { author: me.uid, title, body, createdAt: serverTimestamp() });
+      $("titleIn").value = ""; $("bodyIn").value = ""; try { localStorage.removeItem(DRAFT); } catch (e) {}
+      toast("남겼어요");
+    }
+  } catch (err) { toast("저장하지 못했어요. 인터넷 연결을 확인해 주세요."); }
+  updateCount();
+});
+$("cancelEdit").addEventListener("click", stopEdit);
+function stopEdit() {
+  editingId = null; $("titleIn").value = ""; $("bodyIn").value = "";
+  try { const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (d) { $("titleIn").value = d.t || ""; $("bodyIn").value = d.b || ""; } } catch (e) {}
+  $("cancelEdit").hidden = true; $("saveBtn").textContent = "남기기"; updateCount();
+}
+function startEdit(l) {
+  editingId = l.id; $("titleIn").value = l.title || ""; $("bodyIn").value = l.body || "";
+  $("cancelEdit").hidden = false; $("saveBtn").textContent = "고친 내용 저장"; updateCount();
+  $("compose").scrollIntoView({ behavior: "smooth", block: "start" }); $("bodyIn").focus();
+}
+
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  filter = b.dataset.f;
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+
+// ---- 화면 그리기 ----
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function render() {
+  if (!me) return;
+  const list = $("list");
+  let items = letters;
+  if (filter === "me") items = items.filter((l) => l.author === me.uid);
+  if (filter === "them") items = items.filter((l) => l.author !== me.uid);
+  list.replaceChildren();
+  if (!items.length) {
+    list.append(el("div", "empty", !loaded ? "공책을 펼치는 중이에요…" : filter === "all" ? "아직 첫 장이 비어 있어요. 위에 첫 글을 남겨 보세요." : filter === "me" ? "아직 내가 쓴 글이 없어요." : "아직 받은 글이 없어요."));
+    return;
+  }
+  let lastDay = "";
+  for (const l of items) {
+    const t = ms(l.createdAt), day = fmtDay(t);
+    if (day !== lastDay) { list.append(el("div", "day", day)); lastDay = day; }
+    const mine = l.author === me.uid;
+    const card = el("article", "letter" + (mine ? "" : " them"));
+    const meta = el("div", "meta");
+    meta.append(el("span", "name", nameOf(l.author)), el("span", null, fmtTime(t) + (l.editedAt ? " · 고침" : "")));
+    card.append(meta);
+    if (l.title) card.append(el("h2", null, l.title));
+    card.append(el("p", "body", l.body || ""));
+
+    const box = el("div", "replies");
+    for (const r of replies.filter((r) => r.letterId === l.id)) {
+      const p = el("p", "reply");
+      p.append(el("span", "rn", nameOf(r.author)), document.createTextNode(r.text || ""), el("span", "rt", fmtTime(ms(r.createdAt))));
+      box.append(p);
+    }
+    const f = el("form", "reply-form");
+    const inp = el("input"); inp.maxLength = 500; inp.placeholder = "짧게 답글 달기"; inp.autocomplete = "off";
+    const btn = el("button", "ghost", "보내기"); btn.type = "submit";
+    f.append(inp, btn);
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault(); const text = inp.value.trim(); if (!text) return;
+      btn.disabled = true;
+      try { await addDoc(collection(db, "replies"), { letterId: l.id, author: me.uid, text, createdAt: serverTimestamp() }); inp.value = ""; }
+      catch (err) { toast("답글을 보내지 못했어요."); }
+      btn.disabled = false;
+    });
+    box.append(f); card.append(box);
+
+    if (mine) {
+      if (confirmId === l.id) {
+        const c = el("div", "confirm"); c.append("이 글을 지울까요? 되돌릴 수 없어요.");
+        const yes = el("button", "ghost danger", "지우기"); yes.type = "button";
+        const no = el("button", "ghost", "그만두기"); no.type = "button";
+        yes.onclick = async () => { confirmId = null; try { await deleteDoc(doc(db, "letters", l.id)); toast("지웠어요"); } catch (e) { toast("지우지 못했어요."); render(); } };
+        no.onclick = () => { confirmId = null; render(); };
+        c.append(yes, no); card.append(c);
+      } else {
+        const a = el("div", "actions");
+        const ed = el("button", "ghost", "고치기"); ed.type = "button"; ed.onclick = () => startEdit(l);
+        const del = el("button", "ghost", "지우기"); del.type = "button"; del.onclick = () => { confirmId = l.id; render(); };
+        a.append(ed, del); card.append(a);
+      }
+    }
+    list.append(card);
+  }
+}
+</script>
+</body>
+</html>
