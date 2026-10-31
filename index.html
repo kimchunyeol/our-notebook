@@ -44,6 +44,10 @@ h1 { font-family: var(--f-letter); font-weight: 700; font-size: 1.9rem; margin: 
 .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 2px 0 0; }
 .who { font-size: 0.85rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; }
 
+.presence { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--ink-soft); margin-top: -8px; }
+.presence .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+.presence.on .dot { background: #2FA36B; box-shadow: 0 0 0 3px rgba(47,163,107,.2); }
+.presence.on { color: var(--ink); }
 .card { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--ink-soft); }
 .field input {
@@ -159,6 +163,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 
   <!-- 3) 공책 -->
   <div id="app" hidden style="display:flex;flex-direction:column;gap:22px">
+    <div class="presence" id="presence" hidden><span class="dot" id="presenceDot"></span><span id="presenceText"></span></div>
     <form class="card compose" id="compose">
       <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
       <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
@@ -244,6 +249,50 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 window.addEventListener("pagehide", markSeenNow);
 const isNew = (item) => item.author !== me.uid && item.createdAt && tms(item.createdAt) > seenBefore;
 
+// ---- 지금 들어와 있는지 (접속 표시) ----
+// 공책을 보고 있는 동안 1분마다 "여기 있어요"를 기록하고, 닫으면 "나갔어요"를 기록
+const BEAT_MS = 60 * 1000;
+const isHere = (p) => !!(p && p.here && p.lastActive && Date.now() - tms(p.lastActive) < 3 * BEAT_MS);
+let beatTimer = null;
+function heartbeat() {
+  clearInterval(beatTimer);
+  if (!me) return;
+  const write = (here) => setDoc(doc(db, "people", me.uid), { here, lastActive: serverTimestamp() }, { merge: true }).catch(() => {});
+  if (document.visibilityState === "visible") write(true);
+  beatTimer = setInterval(() => { if (me && document.visibilityState === "visible") write(true); }, BEAT_MS);
+  heartbeat.write = write;
+}
+document.addEventListener("visibilitychange", () => {
+  if (!me || !heartbeat.write) return;
+  heartbeat.write(document.visibilityState === "visible");
+});
+function ago(m) {
+  const s = Math.max(0, Math.round((Date.now() - m) / 1000));
+  if (s < 60) return "방금";
+  if (s < 3600) return Math.floor(s / 60) + "분 전";
+  if (s < 86400) return Math.floor(s / 3600) + "시간 전";
+  if (s < 86400 * 7) return Math.floor(s / 86400) + "일 전";
+  return new Date(m).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+}
+function drawPresence() {
+  if (!me) return;
+  const other = Object.entries(people).find(([id, p]) => id !== me.uid && p.name);
+  const box = $("presence");
+  if (!other) {
+    box.hidden = false; box.classList.remove("on");
+    $("presenceText").textContent = "아직 상대방이 공책에 들어오지 않았어요";
+    return;
+  }
+  const p = other[1];
+  box.hidden = false;
+  if (isHere(p)) { box.classList.add("on"); $("presenceText").textContent = p.name + "님이 지금 공책을 보고 있어요"; }
+  else {
+    box.classList.remove("on");
+    $("presenceText").textContent = p.lastActive ? p.name + "님 마지막 접속 " + ago(tms(p.lastActive)) : p.name + "님은 아직 접속 기록이 없어요";
+  }
+}
+setInterval(drawPresence, 30 * 1000);
+
 // ---- 로그인 ----
 $("loginBox").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -251,7 +300,11 @@ $("loginBox").addEventListener("submit", async (e) => {
   try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
-$("logout").addEventListener("click", () => { markSeenNow(); signOut(auth).then(() => location.reload()); });
+$("logout").addEventListener("click", async () => {
+  markSeenNow();
+  if (heartbeat.write) { try { await heartbeat.write(false); } catch (e) {} }
+  signOut(auth).then(() => location.reload());
+});
 
 const DENIED_MSG = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
 function denied() {
@@ -274,11 +327,25 @@ onAuthStateChanged(auth, (u) => {
   seenBefore = loadSeen();
   $("who").hidden = false;
 
+  let firstPeople = true;
   unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
+    const before = people;
     people = {}; snap.forEach((d) => (people[d.id] = d.data()));
     $("meName").textContent = nameOf(u.uid) + " 님";
-    if (!people[u.uid]) show("nameBox"); else { show("app"); render(); }
+    // 그분이 들어오면 알려 주기
+    if (!firstPeople) {
+      for (const [id, p] of Object.entries(people)) {
+        if (id === u.uid || !p.name) continue;
+        const was = before[id] || {};
+        if (!was.name) toast(p.name + "님이 공책에 처음 들어왔어요", 5000);
+        else if (isHere(p) && !isHere(was)) toast(p.name + "님이 공책에 들어왔어요", 5000);
+      }
+    }
+    firstPeople = false;
+    drawPresence();
+    if (!(people[u.uid] && people[u.uid].name)) show("nameBox"); else { show("app"); render(); }
   }, denied));
+  heartbeat();
 
   unsubs.push(onSnapshot(query(collection(db, "letters"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
     letters = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
