@@ -12,7 +12,7 @@
 <style>
 :root {
   --paper: #F2F4F8; --sheet: #FFFFFF; --ink: #1E2640; --ink-soft: #5C6684;
-  --line: #DCE1EC; --pen: #3D4FB8; --pen-soft: #E6E9F8; --rose: #C2577A; --danger: #B3364A;
+  --line: #DCE1EC; --pen: #3D4FB8; --pen-soft: #E6E9F8; --rose: #C2577A; --rose-soft: #F8E6EC; --danger: #B3364A;
   --f-letter: "Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
   --f-ui: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   color-scheme: light;
@@ -20,7 +20,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #12151F; --sheet: #1B2030; --ink: #E7EAF4; --ink-soft: #9AA3BF;
-    --line: #2C3347; --pen: #93A2F2; --pen-soft: #262D4A; --rose: #EE93B2; --danger: #F08A9A;
+    --line: #2C3347; --pen: #93A2F2; --pen-soft: #262D4A; --rose: #EE93B2; --rose-soft: #3A2430; --danger: #F08A9A;
     color-scheme: dark;
   }
 }
@@ -59,9 +59,10 @@ h1 { font-family: var(--f-letter); font-weight: 700; font-size: 1.9rem; margin: 
 }
 .compose input.t::placeholder, .compose textarea::placeholder { color: var(--ink-soft); opacity: .7; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.row-l { display: flex; align-items: center; gap: 10px; }
 .count { font-size: 0.8rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 button { font-family: var(--f-ui); font-size: 0.9rem; font-weight: 500; cursor: pointer; border-radius: 999px; padding: 8px 18px; border: 1px solid transparent; }
-button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:focus-within { outline: 2px solid var(--pen); outline-offset: 2px; }
 .primary { background: var(--pen); color: var(--sheet); }
 .primary:disabled { opacity: .45; cursor: default; }
 .ghost { background: transparent; color: var(--ink-soft); border-color: var(--line); padding: 5px 12px; font-size: 0.8rem; }
@@ -69,17 +70,45 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .danger { color: var(--danger); }
 .err { color: var(--danger); font-size: 0.88rem; margin: 0; }
 
+/* 사진 넣기 버튼 */
+.photo-btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 0.8rem;
+}
+.photo-btn:hover { color: var(--ink); }
+.photo-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.photo-btn svg { width: 16px; height: 16px; }
+
+/* 사진 모음 */
+.pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.pics.one { grid-template-columns: 1fr; }
+.pics.one .pic { aspect-ratio: auto; max-height: 420px; }
+.pic {
+  position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+  background: var(--pen-soft); border: 0; padding: 0; cursor: zoom-in; max-width: 100%;
+}
+.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pics.one .pic img { height: auto; max-height: 420px; object-fit: contain; background: var(--paper); }
+.pic .x {
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 14px; line-height: 24px; text-align: center;
+}
+.pic.loading::after { content: "불러오는 중"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.75rem; color: var(--ink-soft); }
+
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .tabs button { background: transparent; border-color: var(--line); color: var(--ink-soft); padding: 6px 14px; }
 .tabs button[aria-pressed="true"] { background: var(--pen-soft); color: var(--pen); border-color: transparent; }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--rose); color: var(--sheet); font-size: 0.72rem; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 
 .day { font-size: 0.78rem; letter-spacing: 0.08em; color: var(--ink-soft); margin: 8px 0 -8px 2px; }
 .list { display: flex; flex-direction: column; gap: 14px; }
 .letter { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 14px 22px; position: relative; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .letter::before { content: ""; position: absolute; left: 10px; top: 16px; bottom: 16px; width: 2px; border-radius: 2px; background: var(--pen); }
 .letter.them::before { background: var(--rose); }
-.meta { font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; }
+.letter.unread { border-color: var(--rose); }
+.meta { font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .meta .name { color: var(--ink); font-weight: 500; }
+.chip { background: var(--rose-soft); color: var(--rose); border-radius: 999px; padding: 0 8px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
 .letter h2 { font-family: var(--f-letter); font-size: 1.15rem; margin: 0; }
 .letter .body { font-family: var(--f-letter); font-size: 1.02rem; line-height: 1.95; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -87,11 +116,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .reply { font-size: 0.9rem; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reply .rn { font-weight: 500; margin-right: 6px; }
 .reply .rt { color: var(--ink-soft); font-size: 0.75rem; margin-left: 6px; }
+.reply .chip { margin-left: 6px; }
 .reply-form { display: flex; gap: 8px; }
 .reply-form input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 7px 14px; font-family: var(--f-ui); font-size: 0.9rem; }
 .confirm { font-size: 0.85rem; color: var(--danger); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .empty { text-align: center; color: var(--ink-soft); padding: 32px 12px; font-family: var(--f-letter); font-size: 1.05rem; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 999px; font-size: 0.88rem; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 999px; font-size: 0.88rem; z-index: 30; max-width: calc(100% - 32px); }
+
+/* 사진 크게 보기 */
+.viewer {
+  position: fixed; inset: 0; z-index: 40; background: rgba(8,10,16,.92);
+  display: grid; place-items: center; cursor: zoom-out;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.viewer button { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: rgba(255,255,255,.15); color: #fff; }
 </style>
 </head>
 <body>
@@ -114,7 +153,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
   <!-- 2) 처음 한 번: 이름 정하기 -->
   <form class="card" id="nameBox" hidden>
-    <label class="field">공책에서 뭐라고 불러 드릴까요?<input id="nameIn" maxlength="20" placeholder="예: 소열" required></label>
+    <label class="field">공책에서 뭐라고 불러 드릴까요?<input id="nameIn" maxlength="20" placeholder="예: 소열" required autocomplete="off"></label>
     <button type="submit" class="primary">이 이름으로 시작</button>
   </form>
 
@@ -123,9 +162,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
     <form class="card compose" id="compose">
       <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
       <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
+      <div class="pics" id="pending" hidden></div>
       <div class="row">
-        <span class="count" id="count">0 / 5000</span>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div class="row-l">
+          <label class="photo-btn" id="photoBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg>
+            사진 넣기
+            <input type="file" id="photoIn" accept="image/*" multiple>
+          </label>
+          <span class="count" id="count">0 / 5000</span>
+        </div>
+        <div class="row-l">
           <button type="button" class="ghost" id="cancelEdit" hidden>수정 취소</button>
           <button type="submit" class="primary" id="saveBtn" disabled>남기기</button>
         </div>
@@ -134,21 +181,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
     <div class="tabs" role="group" aria-label="보기">
       <button type="button" data-f="all" aria-pressed="true">모두</button>
       <button type="button" data-f="me" aria-pressed="false">내가 쓴 글</button>
-      <button type="button" data-f="them" aria-pressed="false">받은 글</button>
+      <button type="button" data-f="them" aria-pressed="false">받은 글<span class="badge" id="unreadBadge" hidden></span></button>
     </div>
     <div class="list" id="list"><div class="empty">공책을 펼치는 중이에요…</div></div>
   </div>
 
   <div class="card" id="setupMsg" hidden>
-    <p style="margin:0">아직 Firebase 설정이 들어가 있지 않아요. <b>index.html</b> 안의 <b>firebaseConfig</b> 부분을 채워 주세요. (설정방법.md 3단계)</p>
+    <p style="margin:0">아직 Firebase 설정이 들어가 있지 않아요. <b>index.html</b> 안의 <b>firebaseConfig</b> 부분을 채워 주세요.</p>
   </div>
 </div>
+<div class="viewer" id="viewer" hidden><img id="viewerImg" alt="크게 본 사진"><button type="button" id="viewerClose">닫기</button></div>
 <div class="toast" id="toast" hidden></div>
 
 <script type="module">
 // ================================================================
-//  ▼▼▼ 여기만 바꾸면 돼요 (설정방법.md 3단계) ▼▼▼
-//  Firebase 콘솔에서 복사한 내용을 그대로 붙여 넣으세요.
+//  Firebase 연결 값
 // ================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyC3pbL5U-n6IHLCbDOHN6ARcCbuyJPuz70",
@@ -163,27 +210,39 @@ const firebaseConfig = {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp }
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
 const show = (id) => ["loginBox", "nameBox", "app", "setupMsg"].forEach((x) => { if ($(x)) $(x).hidden = x !== id; });
-
-if (firebaseConfig.apiKey.startsWith("여기에")) { show("setupMsg"); throw new Error("firebaseConfig 미설정"); }
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
 const db = getFirestore(fb);
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
+const MAX_PHOTOS = 4;
 let me = null, people = {}, letters = [], replies = [], filter = "all";
 let editingId = null, confirmId = null, loaded = false, unsubs = [];
+let pending = [];            // 아직 올리지 않은 사진 (dataURL)
+const photoCache = {};       // 사진 id → dataURL
+let seenBefore = 0;          // 이번에 열기 전 마지막으로 본 시각
+let firstLetters = true, firstReplies = true;
 
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2200); }
-const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : Date.now());
+function toast(msg, ms = 2400) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), ms); }
+const tms = (ts) => (ts && ts.toMillis ? ts.toMillis() : Date.now());
 const fmtDay = (m) => new Date(m).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
 const fmtTime = (m) => new Date(m).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 const nameOf = (uid) => (people[uid] && people[uid].name) || (uid === me?.uid ? "나" : "그 사람");
+
+// ---- 읽음 표시 (이 기기에만 저장) ----
+const seenKey = () => "nb-seen-" + me.uid;
+function loadSeen() { try { return Number(localStorage.getItem(seenKey())) || 0; } catch (e) { return 0; } }
+function markSeenNow() { if (!me) return; try { localStorage.setItem(seenKey(), String(Date.now())); } catch (e) {} }
+// 공책을 닫거나 다른 앱으로 넘어갈 때 "여기까지 읽음"으로 기록
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") markSeenNow(); });
+window.addEventListener("pagehide", markSeenNow);
+const isNew = (item) => item.author !== me.uid && item.createdAt && tms(item.createdAt) > seenBefore;
 
 // ---- 로그인 ----
 $("loginBox").addEventListener("submit", async (e) => {
@@ -192,28 +251,8 @@ $("loginBox").addEventListener("submit", async (e) => {
   try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
-$("logout").addEventListener("click", () => signOut(auth).then(() => location.reload()));
+$("logout").addEventListener("click", () => { markSeenNow(); signOut(auth).then(() => location.reload()); });
 
-onAuthStateChanged(auth, (u) => {
-  unsubs.forEach((f) => f()); unsubs = [];
-  me = u; loaded = false; letters = []; replies = [];
-  if (!u) { $("who").hidden = true; show("loginBox"); return; }
-  // 로그인하면 비밀번호 칸을 화면에서 완전히 없애서 암호 자동완성 창이 다시 뜨지 않게 함
-  const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
-  $("who").hidden = false;
-  // 두 사람 이름 불러오기
-  unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
-    people = {}; snap.forEach((d) => (people[d.id] = d.data()));
-    $("meName").textContent = nameOf(u.uid) + " 님";
-    if (!people[u.uid]) show("nameBox"); else { show("app"); render(); }
-  }, denied));
-  unsubs.push(onSnapshot(query(collection(db, "letters"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
-    letters = snap.docs.map((d) => ({ id: d.id, ...d.data() })); loaded = true; render();
-  }, denied));
-  unsubs.push(onSnapshot(query(collection(db, "replies"), orderBy("createdAt", "asc"), limit(1000)), (snap) => {
-    replies = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render();
-  }, () => {}));
-});
 const DENIED_MSG = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
 function denied() {
   try { sessionStorage.setItem("nb-denied", "1"); } catch (e) {}
@@ -226,17 +265,115 @@ try {
   }
 } catch (e) {}
 
+onAuthStateChanged(auth, (u) => {
+  unsubs.forEach((f) => f()); unsubs = [];
+  me = u; loaded = false; letters = []; replies = []; firstLetters = true; firstReplies = true;
+  if (!u) { $("who").hidden = true; show("loginBox"); return; }
+  // 로그인하면 비밀번호 칸을 없애서 암호 자동완성 창이 다시 뜨지 않게 함
+  const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
+  seenBefore = loadSeen();
+  $("who").hidden = false;
+
+  unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
+    people = {}; snap.forEach((d) => (people[d.id] = d.data()));
+    $("meName").textContent = nameOf(u.uid) + " 님";
+    if (!people[u.uid]) show("nameBox"); else { show("app"); render(); }
+  }, denied));
+
+  unsubs.push(onSnapshot(query(collection(db, "letters"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
+    letters = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (!firstLetters) {
+      for (const c of snap.docChanges()) {
+        if (c.type === "added" && c.doc.data().author !== u.uid && !c.doc.metadata.hasPendingWrites) {
+          toast(nameOf(c.doc.data().author) + "님이 새 글을 남겼어요", 3500);
+        }
+      }
+    }
+    firstLetters = false; loaded = true; render();
+  }, denied));
+
+  unsubs.push(onSnapshot(query(collection(db, "replies"), orderBy("createdAt", "asc"), limit(1000)), (snap) => {
+    replies = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (!firstReplies) {
+      for (const c of snap.docChanges()) {
+        if (c.type === "added" && c.doc.data().author !== u.uid && !c.doc.metadata.hasPendingWrites) {
+          toast(nameOf(c.doc.data().author) + "님이 답글을 달았어요", 3500);
+        }
+      }
+    }
+    firstReplies = false; render();
+  }, () => {}));
+});
+
 $("nameBox").addEventListener("submit", async (e) => {
   e.preventDefault();
   const n = $("nameIn").value.trim(); if (!n) return;
-  try { await setDoc(doc(db, "people", me.uid), { name: n }); } catch (err) { toast("이름을 저장하지 못했어요."); }
+  try { await setDoc(doc(db, "people", me.uid), { name: n }, { merge: true }); } catch (err) { toast("이름을 저장하지 못했어요."); }
 });
+
+// ---- 사진 줄이기: 휴대폰 사진을 긴 쪽 1600px 안쪽, 약 0.7MB 이하로 ----
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { res(img); setTimeout(() => URL.revokeObjectURL(url), 0); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("읽을 수 없는 사진")); };
+    img.src = url;
+  });
+}
+async function shrink(file) {
+  const img = await loadImage(file);
+  let max = 1600, q = 0.8, out = "";
+  for (let i = 0; i < 7; i++) {
+    const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.naturalWidth * s));
+    c.height = Math.max(1, Math.round(img.naturalHeight * s));
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    out = c.toDataURL("image/jpeg", q);
+    if (out.length < 700000) break;
+    max = Math.round(max * 0.8); q = Math.max(0.55, q - 0.07);
+  }
+  return out;
+}
+
+$("photoIn").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (!files.length) return;
+  const room = MAX_PHOTOS - pending.length;
+  if (room <= 0) { toast("사진은 한 글에 " + MAX_PHOTOS + "장까지 넣을 수 있어요"); return; }
+  if (files.length > room) toast("사진은 한 글에 " + MAX_PHOTOS + "장까지라서 " + room + "장만 넣었어요");
+  for (const f of files.slice(0, room)) {
+    try { pending.push(await shrink(f)); }
+    catch (err) { toast("이 사진은 열 수 없어요. 다른 사진으로 해 보세요."); }
+  }
+  drawPending(); updateCount();
+});
+
+function drawPending() {
+  const box = $("pending");
+  box.replaceChildren();
+  box.hidden = pending.length === 0;
+  pending.forEach((src, i) => {
+    const d = el("div", "pic");
+    const img = el("img"); img.src = src; img.alt = "넣을 사진 " + (i + 1);
+    const x = el("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", "이 사진 빼기");
+    x.onclick = () => { pending.splice(i, 1); drawPending(); updateCount(); };
+    d.append(img, x); box.append(d);
+  });
+}
 
 // ---- 쓰기 ----
 const DRAFT = "our-notebook-draft";
 try { const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (d) { $("titleIn").value = d.t || ""; $("bodyIn").value = d.b || ""; } } catch (e) {}
 const saveDraft = () => { if (editingId) return; try { localStorage.setItem(DRAFT, JSON.stringify({ t: $("titleIn").value, b: $("bodyIn").value })); } catch (e) {} };
-function updateCount() { $("count").textContent = $("bodyIn").value.length + " / 5000"; $("saveBtn").disabled = !$("bodyIn").value.trim(); }
+function updateCount() {
+  $("count").textContent = $("bodyIn").value.length + " / 5000";
+  $("saveBtn").disabled = !$("bodyIn").value.trim() && pending.length === 0;
+}
 $("bodyIn").addEventListener("input", () => { updateCount(); saveDraft(); });
 $("titleIn").addEventListener("input", saveDraft);
 updateCount();
@@ -244,28 +381,48 @@ updateCount();
 $("compose").addEventListener("submit", async (e) => {
   e.preventDefault();
   const title = $("titleIn").value.trim(), body = $("bodyIn").value.trim();
-  if (!body || !me) return;
+  if ((!body && !pending.length) || !me) return;
   $("saveBtn").disabled = true;
   try {
     if (editingId) {
-      await updateDoc(doc(db, "letters", editingId), { title, body, editedAt: serverTimestamp() });
+      const old = letters.find((l) => l.id === editingId);
+      const ids = (old && old.photoIds) ? [...old.photoIds] : [];
+      for (const src of pending) {
+        if (ids.length >= MAX_PHOTOS) break;
+        const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: src, createdAt: serverTimestamp() });
+        photoCache[ref.id] = src; ids.push(ref.id);
+      }
+      await updateDoc(doc(db, "letters", editingId), { title, body, photoIds: ids, editedAt: serverTimestamp() });
+      pending = []; drawPending();
       toast("고쳤어요"); stopEdit();
     } else {
-      await addDoc(collection(db, "letters"), { author: me.uid, title, body, createdAt: serverTimestamp() });
-      $("titleIn").value = ""; $("bodyIn").value = ""; try { localStorage.removeItem(DRAFT); } catch (e) {}
+      if (pending.length) toast("사진을 올리는 중이에요…", 6000);
+      const ids = [];
+      for (const src of pending) {
+        const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: src, createdAt: serverTimestamp() });
+        photoCache[ref.id] = src; ids.push(ref.id);
+      }
+      await addDoc(collection(db, "letters"), { author: me.uid, title, body, photoIds: ids, createdAt: serverTimestamp() });
+      $("titleIn").value = ""; $("bodyIn").value = ""; pending = []; drawPending();
+      try { localStorage.removeItem(DRAFT); } catch (e) {}
       toast("남겼어요");
     }
-  } catch (err) { toast("저장하지 못했어요. 인터넷 연결을 확인해 주세요."); }
+  } catch (err) {
+    toast(err && err.code === "resource-exhausted"
+      ? "오늘 쓸 수 있는 무료 용량을 다 썼어요. 내일 다시 해 보세요."
+      : "저장하지 못했어요. 인터넷 연결을 확인해 주세요.");
+  }
   updateCount();
 });
 $("cancelEdit").addEventListener("click", stopEdit);
 function stopEdit() {
-  editingId = null; $("titleIn").value = ""; $("bodyIn").value = "";
+  editingId = null; $("titleIn").value = ""; $("bodyIn").value = ""; pending = []; drawPending();
   try { const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (d) { $("titleIn").value = d.t || ""; $("bodyIn").value = d.b || ""; } } catch (e) {}
   $("cancelEdit").hidden = true; $("saveBtn").textContent = "남기기"; updateCount();
 }
 function startEdit(l) {
   editingId = l.id; $("titleIn").value = l.title || ""; $("bodyIn").value = l.body || "";
+  pending = []; drawPending();
   $("cancelEdit").hidden = false; $("saveBtn").textContent = "고친 내용 저장"; updateCount();
   $("compose").scrollIntoView({ behavior: "smooth", block: "start" }); $("bodyIn").focus();
 }
@@ -276,11 +433,53 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
   render();
 }));
 
+// ---- 사진 크게 보기 ----
+function openViewer(src) { $("viewerImg").src = src; $("viewer").hidden = false; }
+function closeViewer() { $("viewer").hidden = true; $("viewerImg").removeAttribute("src"); }
+$("viewer").addEventListener("click", closeViewer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("viewer").hidden) closeViewer(); });
+
+async function fetchPhoto(id) {
+  if (photoCache[id] !== undefined) return;
+  photoCache[id] = null; // 불러오는 중
+  try {
+    const s = await getDoc(doc(db, "photos", id));
+    photoCache[id] = s.exists() ? s.data().data : "";
+  } catch (e) { photoCache[id] = ""; }
+  document.querySelectorAll('[data-pid="' + id + '"]').forEach(fillPic);
+}
+function fillPic(btn) {
+  const src = photoCache[btn.dataset.pid];
+  if (src) {
+    btn.classList.remove("loading");
+    let img = btn.querySelector("img");
+    if (!img) { img = el("img"); img.alt = "사진"; img.loading = "lazy"; btn.append(img); }
+    img.src = src;
+    btn.onclick = () => openViewer(src);
+  } else if (src === "") {
+    btn.classList.remove("loading"); btn.textContent = "사진 없음"; btn.style.cursor = "default";
+  } else {
+    btn.classList.add("loading");
+  }
+}
+
 // ---- 화면 그리기 ----
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function render() {
   if (!me) return;
+
+  // 안 읽은 수
+  const newLetters = letters.filter(isNew).length;
+  const newReplies = replies.filter(isNew).length;
+  const total = newLetters + newReplies;
+  $("unreadBadge").textContent = String(total);
+  $("unreadBadge").hidden = total === 0;
+  document.title = (total ? "(" + total + ") " : "") + "우리 둘의 공책";
+
   const list = $("list");
+  // 다시 그려도 쓰던 답글이 지워지지 않게 보관
+  const keep = {}; list.querySelectorAll(".reply-form input").forEach((i) => { if (i.value) keep[i.id] = i.value; });
+  const focusId = document.activeElement && document.activeElement.id;
   let items = letters;
   if (filter === "me") items = items.filter((l) => l.author === me.uid);
   if (filter === "them") items = items.filter((l) => l.author !== me.uid);
@@ -291,24 +490,37 @@ function render() {
   }
   let lastDay = "";
   for (const l of items) {
-    const t = ms(l.createdAt), day = fmtDay(t);
+    const t = tms(l.createdAt), day = fmtDay(t);
     if (day !== lastDay) { list.append(el("div", "day", day)); lastDay = day; }
     const mine = l.author === me.uid;
-    const card = el("article", "letter" + (mine ? "" : " them"));
+    const unread = isNew(l);
+    const card = el("article", "letter" + (mine ? "" : " them") + (unread ? " unread" : ""));
     const meta = el("div", "meta");
     meta.append(el("span", "name", nameOf(l.author)), el("span", null, fmtTime(t) + (l.editedAt ? " · 고침" : "")));
+    if (unread) meta.append(el("span", "chip", "새 글"));
     card.append(meta);
     if (l.title) card.append(el("h2", null, l.title));
-    card.append(el("p", "body", l.body || ""));
+    if (l.body) card.append(el("p", "body", l.body));
+
+    const pids = l.photoIds || [];
+    if (pids.length) {
+      const grid = el("div", "pics" + (pids.length === 1 ? " one" : ""));
+      for (const id of pids) {
+        const b = el("button", "pic"); b.type = "button"; b.dataset.pid = id; b.setAttribute("aria-label", "사진 크게 보기");
+        grid.append(b); fillPic(b); fetchPhoto(id);
+      }
+      card.append(grid);
+    }
 
     const box = el("div", "replies");
     for (const r of replies.filter((r) => r.letterId === l.id)) {
       const p = el("p", "reply");
-      p.append(el("span", "rn", nameOf(r.author)), document.createTextNode(r.text || ""), el("span", "rt", fmtTime(ms(r.createdAt))));
+      p.append(el("span", "rn", nameOf(r.author)), document.createTextNode(r.text || ""), el("span", "rt", fmtTime(tms(r.createdAt))));
+      if (isNew(r)) p.append(el("span", "chip", "새 답글"));
       box.append(p);
     }
     const f = el("form", "reply-form");
-    const inp = el("input"); inp.maxLength = 500; inp.placeholder = "짧게 답글 달기"; inp.autocomplete = "off";
+    const inp = el("input"); inp.maxLength = 500; inp.placeholder = "짧게 답글 달기"; inp.autocomplete = "off"; inp.id = "reply-" + l.id;
     const btn = el("button", "ghost", "보내기"); btn.type = "submit";
     f.append(inp, btn);
     f.addEventListener("submit", async (e) => {
@@ -325,7 +537,14 @@ function render() {
         const c = el("div", "confirm"); c.append("이 글을 지울까요? 되돌릴 수 없어요.");
         const yes = el("button", "ghost danger", "지우기"); yes.type = "button";
         const no = el("button", "ghost", "그만두기"); no.type = "button";
-        yes.onclick = async () => { confirmId = null; try { await deleteDoc(doc(db, "letters", l.id)); toast("지웠어요"); } catch (e) { toast("지우지 못했어요."); render(); } };
+        yes.onclick = async () => {
+          confirmId = null;
+          try {
+            await deleteDoc(doc(db, "letters", l.id));
+            for (const id of pids) { try { await deleteDoc(doc(db, "photos", id)); } catch (e) {} }
+            toast("지웠어요");
+          } catch (e) { toast("지우지 못했어요."); render(); }
+        };
         no.onclick = () => { confirmId = null; render(); };
         c.append(yes, no); card.append(c);
       } else {
@@ -337,6 +556,8 @@ function render() {
     }
     list.append(card);
   }
+  for (const id in keep) { const i = $(id); if (i) i.value = keep[id]; }
+  if (focusId && focusId.startsWith("reply-") && $(focusId)) $(focusId).focus();
 }
 </script>
 </body>
