@@ -121,8 +121,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   <!-- 3) 공책 -->
   <div id="app" hidden style="display:flex;flex-direction:column;gap:22px">
     <form class="card compose" id="compose">
-      <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off">
-      <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요"></textarea>
+      <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+      <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
       <div class="row">
         <span class="count" id="count">0 / 5000</span>
         <div style="display:flex;gap:8px;align-items:center">
@@ -167,7 +167,7 @@ import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, on
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
-const show = (id) => ["loginBox", "nameBox", "app", "setupMsg"].forEach((x) => ($(x).hidden = x !== id));
+const show = (id) => ["loginBox", "nameBox", "app", "setupMsg"].forEach((x) => { if ($(x)) $(x).hidden = x !== id; });
 
 if (firebaseConfig.apiKey.startsWith("여기에")) { show("setupMsg"); throw new Error("firebaseConfig 미설정"); }
 
@@ -192,12 +192,14 @@ $("loginBox").addEventListener("submit", async (e) => {
   try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
-$("logout").addEventListener("click", () => signOut(auth));
+$("logout").addEventListener("click", () => signOut(auth).then(() => location.reload()));
 
 onAuthStateChanged(auth, (u) => {
   unsubs.forEach((f) => f()); unsubs = [];
   me = u; loaded = false; letters = []; replies = [];
   if (!u) { $("who").hidden = true; show("loginBox"); return; }
+  // 로그인하면 비밀번호 칸을 화면에서 완전히 없애서 암호 자동완성 창이 다시 뜨지 않게 함
+  const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
   $("who").hidden = false;
   // 두 사람 이름 불러오기
   unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
@@ -212,11 +214,17 @@ onAuthStateChanged(auth, (u) => {
     replies = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render();
   }, () => {}));
 });
+const DENIED_MSG = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
 function denied() {
-  show("loginBox");
-  $("loginErr").textContent = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
-  $("loginErr").hidden = false;
+  try { sessionStorage.setItem("nb-denied", "1"); } catch (e) {}
+  signOut(auth).then(() => location.reload());
 }
+try {
+  if (sessionStorage.getItem("nb-denied")) {
+    sessionStorage.removeItem("nb-denied");
+    $("loginErr").textContent = DENIED_MSG; $("loginErr").hidden = false;
+  }
+} catch (e) {}
 
 $("nameBox").addEventListener("submit", async (e) => {
   e.preventDefault();
