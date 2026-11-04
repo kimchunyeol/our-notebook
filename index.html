@@ -133,6 +133,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .letter::before { content: ""; position: absolute; left: 10px; top: 16px; bottom: 16px; width: 2px; border-radius: 2px; background: var(--pen); }
 .letter.them::before { background: var(--rose); }
 .letter.unread { border-color: var(--rose); }
+/* 목록 한 줄 */
+.letter:not(.open) { padding-block: 12px; }
+.letter:not(.open)::before { top: 12px; bottom: 12px; }
+.sum {
+  all: unset; box-sizing: border-box; cursor: pointer; width: 100%; min-width: 0;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "top chev" "title chev" "info chev";
+  column-gap: 10px; row-gap: 2px; align-items: center;
+}
+.sum:focus-visible { outline: 2px solid var(--pen); outline-offset: 4px; border-radius: 8px; }
+.sum-top { grid-area: top; font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sum-top .name { color: var(--ink); font-weight: 500; }
+.sum-title { grid-area: title; font-family: var(--f-letter); font-weight: 700; font-size: 1.08rem; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sum-title.plain { font-weight: 400; font-size: 1rem; }
+.letter.open .sum-title { white-space: normal; overflow-wrap: anywhere; font-size: 1.15rem; }
+.letter.open .sum-title.plain { display: none; }
+.sum-info { grid-area: info; font-size: 0.76rem; color: var(--ink-soft); display: flex; gap: 10px; }
+.sum-info:empty { display: none; }
+.chev { grid-area: chev; width: 9px; height: 9px; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); transform: rotate(45deg); margin: 0 4px 4px 0; transition: transform .15s; }
+.letter.open .chev { transform: rotate(-135deg); margin: 4px 4px 0 0; }
+.tabs .expand { margin-left: auto; border-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
 .meta { font-size: 0.8rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .meta .name { color: var(--ink); font-weight: 500; }
 .chip { background: var(--rose-soft); color: var(--rose); border-radius: 999px; padding: 0 8px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
@@ -231,6 +252,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
       <button type="button" data-f="all" aria-pressed="true">모두</button>
       <button type="button" data-f="me" aria-pressed="false">내가 쓴 글</button>
       <button type="button" data-f="them" aria-pressed="false">받은 글<span class="badge" id="unreadBadge" hidden></span></button>
+      <button type="button" class="expand" id="expandAll" hidden>모두 펼치기</button>
     </div>
     <div class="list" id="list"><div class="empty">공책을 펼치는 중이에요…</div></div>
   </div>
@@ -301,7 +323,9 @@ let beatTimer = null;
 function heartbeat() {
   clearInterval(beatTimer);
   if (!me) return;
-  const write = (here) => setDoc(doc(db, "people", me.uid), { here, lastActive: serverTimestamp() }, { merge: true }).catch(() => {});
+  // leftBy: 어떻게 나갔는지 — "logout"(나가기 버튼) / "close"(공책을 닫거나 다른 앱으로)
+  const write = (here, leftBy) => setDoc(doc(db, "people", me.uid),
+    { here, leftBy: here ? "" : (leftBy || "close"), lastActive: serverTimestamp() }, { merge: true }).catch(() => {});
   if (document.visibilityState === "visible") write(true);
   beatTimer = setInterval(() => { if (me && document.visibilityState === "visible") write(true); }, BEAT_MS);
   heartbeat.write = write;
@@ -318,8 +342,41 @@ function ago(m) {
   if (s < 86400 * 7) return Math.floor(s / 86400) + "일 전";
   return new Date(m).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 }
+// 상대방이 들어오고 나가는 순간을 알려 주기
+const wasHere = {};          // uid → 지난번에 들어와 있었는지
+let presenceReady = false;   // 처음 화면을 열 때는 알리지 않음
+function checkComings() {
+  if (!me) return;
+  for (const [id, p] of Object.entries(people)) {
+    if (id === me.uid || !p.name) continue;
+    const now = isHere(p), before = wasHere[id];
+    if (presenceReady && before !== undefined && now !== before) {
+      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");
+      else if (p.leftBy === "logout") alertPerson(p.name + "님이 '나가기'를 눌러 공책에서 나갔어요");
+      else if (!p.here) alertPerson(p.name + "님이 공책을 나갔어요");
+      else alertPerson(p.name + "님 연결이 끊겼어요. 공책을 나간 것 같아요");
+    }
+    wasHere[id] = now;
+  }
+  presenceReady = true;
+}
+// 알림: 화면 아래 안내 + 다른 탭을 보고 있으면 탭 제목도 바꿔 줌
+let titleTimer = null;
+function alertPerson(msg) {
+  toast(msg, 6000);
+  if (document.visibilityState !== "visible") {
+    clearInterval(titleTimer);
+    let flip = false;
+    titleTimer = setInterval(() => { document.title = (flip = !flip) ? "🔔 " + msg : "우리 둘의 공책"; }, 1500);
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && titleTimer) { clearInterval(titleTimer); titleTimer = null; if (me) render(); }
+});
+
 function drawPresence() {
   if (!me) return;
+  checkComings();
   const other = Object.entries(people).find(([id, p]) => id !== me.uid && p.name);
   const box = $("presence");
   if (!other) {
@@ -332,10 +389,12 @@ function drawPresence() {
   if (isHere(p)) { box.classList.add("on"); $("presenceText").textContent = p.name + "님이 지금 공책을 보고 있어요"; }
   else {
     box.classList.remove("on");
-    $("presenceText").textContent = p.lastActive ? p.name + "님 마지막 접속 " + ago(tms(p.lastActive)) : p.name + "님은 아직 접속 기록이 없어요";
+    $("presenceText").textContent = p.lastActive
+      ? p.name + "님 마지막 접속 " + ago(tms(p.lastActive)) + (p.leftBy === "logout" ? " · 나가기를 눌렀어요" : "")
+      : p.name + "님은 아직 접속 기록이 없어요";
   }
 }
-setInterval(drawPresence, 30 * 1000);
+setInterval(drawPresence, 20 * 1000);
 
 // ---- 디데이 ----
 // 두 사람이 같이 쓰는 기념일 정보: settings/couple 문서 하나에 { startDate, events:[{id,name,date,yearly}] }
@@ -448,7 +507,7 @@ $("loginBox").addEventListener("submit", async (e) => {
 });
 $("logout").addEventListener("click", async () => {
   markSeenNow();
-  if (heartbeat.write) { try { await heartbeat.write(false); } catch (e) {} }
+  if (heartbeat.write) { try { await heartbeat.write(false, "logout"); } catch (e) {} }
   signOut(auth).then(() => location.reload());
 });
 
@@ -478,13 +537,12 @@ onAuthStateChanged(auth, (u) => {
     const before = people;
     people = {}; snap.forEach((d) => (people[d.id] = d.data()));
     $("meName").textContent = nameOf(u.uid) + " 님";
-    // 그분이 들어오면 알려 주기
+    // 그분이 처음 들어오면 알려 주기 (들어오고 나가는 건 drawPresence에서)
     if (!firstPeople) {
       for (const [id, p] of Object.entries(people)) {
         if (id === u.uid || !p.name) continue;
         const was = before[id] || {};
-        if (!was.name) toast(p.name + "님이 공책에 처음 들어왔어요", 5000);
-        else if (isHere(p) && !isHere(was)) toast(p.name + "님이 공책에 들어왔어요", 5000);
+        if (!was.name) { toast(p.name + "님이 공책에 처음 들어왔어요", 6000); wasHere[id] = isHere(p); }
       }
     }
     firstPeople = false;
@@ -684,6 +742,18 @@ function fillPic(btn) {
 
 // ---- 화면 그리기 ----
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const openIds = new Set();   // 펼쳐 둔 글
+function visibleLetters() {
+  if (filter === "me") return letters.filter((l) => l.author === me.uid);
+  if (filter === "them") return letters.filter((l) => l.author !== me.uid);
+  return letters;
+}
+$("expandAll").addEventListener("click", () => {
+  const items = visibleLetters();
+  if (items.every((l) => openIds.has(l.id))) items.forEach((l) => openIds.delete(l.id));
+  else items.forEach((l) => openIds.add(l.id));
+  render();
+});
 function render() {
   if (!me) return;
 
@@ -704,7 +774,8 @@ function render() {
   if (filter === "them") items = items.filter((l) => l.author !== me.uid);
   list.replaceChildren();
   if (!items.length) {
-    list.append(el("div", "empty", !loaded ? "공책을 펼치는 중이에요…" : filter === "all" ? "아직 첫 장이 비어 있어요. 위에 첫 글을 남겨 보세요." : filter === "me" ? "아직 내가 쓴 글이 없어요." : "아직 받은 글이 없어요."));
+    $("expandAll").hidden = true;
+    list.append(el("div", "empty", !loaded ?"공책을 펼치는 중이에요…" : filter === "all" ? "아직 첫 장이 비어 있어요. 위에 첫 글을 남겨 보세요." : filter === "me" ? "아직 내가 쓴 글이 없어요." : "아직 받은 글이 없어요."));
     return;
   }
   let lastDay = "";
@@ -713,15 +784,32 @@ function render() {
     if (day !== lastDay) { list.append(el("div", "day", day)); lastDay = day; }
     const mine = l.author === me.uid;
     const unread = isNew(l);
-    const card = el("article", "letter" + (mine ? "" : " them") + (unread ? " unread" : ""));
-    const meta = el("div", "meta");
-    meta.append(el("span", "name", nameOf(l.author)), el("span", null, fmtTime(t) + (l.editedAt ? " · 고침" : "")));
-    if (unread) meta.append(el("span", "chip", "새 글"));
-    card.append(meta);
-    if (l.title) card.append(el("h2", null, l.title));
-    if (l.body) card.append(el("p", "body", l.body));
-
     const pids = l.photoIds || [];
+    const myReplies = replies.filter((r) => r.letterId === l.id);
+    const newReply = myReplies.some(isNew);
+    const open = openIds.has(l.id);
+    const card = el("article", "letter" + (mine ? "" : " them") + (unread ? " unread" : "") + (open ? " open" : ""));
+
+    // 목록 한 줄: 누가·언제 / 제목(없으면 첫 줄) / 사진·답글 수
+    const sum = el("button", "sum"); sum.type = "button"; sum.id = "sum-" + l.id;
+    sum.setAttribute("aria-expanded", String(open));
+    const top = el("span", "sum-top");
+    top.append(el("span", "name", nameOf(l.author)), el("span", null, fmtTime(t) + (l.editedAt ? " · 고침" : "")));
+    if (unread) top.append(el("span", "chip", "새 글"));
+    else if (newReply) top.append(el("span", "chip", "새 답글"));
+    const firstLine = (l.body || "").split("\n").find((s) => s.trim()) || "";
+    const ttl = el("span", "sum-title" + (l.title ? "" : " plain"), l.title || firstLine || (pids.length ? "사진" : "내용 없음"));
+    const info = el("span", "sum-info");
+    if (pids.length) info.append(el("span", null, "사진 " + pids.length));
+    if (myReplies.length) info.append(el("span", null, "답글 " + myReplies.length));
+    const chev = el("span", "chev"); chev.setAttribute("aria-hidden", "true");
+    sum.append(top, ttl, info, chev);
+    sum.onclick = () => { if (openIds.has(l.id)) openIds.delete(l.id); else openIds.add(l.id); render(); };
+    card.append(sum);
+    if (!open) { list.append(card); continue; }
+
+    // 펼쳤을 때: 본문 전체, 사진, 답글
+    if (l.body) card.append(el("p", "body", l.body));
     if (pids.length) {
       const grid = el("div", "pics" + (pids.length === 1 ? " one" : ""));
       for (const id of pids) {
@@ -732,7 +820,7 @@ function render() {
     }
 
     const box = el("div", "replies");
-    for (const r of replies.filter((r) => r.letterId === l.id)) {
+    for (const r of myReplies) {
       const p = el("p", "reply");
       p.append(el("span", "rn", nameOf(r.author)), document.createTextNode(r.text || ""), el("span", "rt", fmtTime(tms(r.createdAt))));
       if (isNew(r)) p.append(el("span", "chip", "새 답글"));
@@ -776,7 +864,9 @@ function render() {
     list.append(card);
   }
   for (const id in keep) { const i = $(id); if (i) i.value = keep[id]; }
-  if (focusId && focusId.startsWith("reply-") && $(focusId)) $(focusId).focus();
+  if (focusId && (focusId.startsWith("reply-") || focusId.startsWith("sum-")) && $(focusId)) $(focusId).focus({ preventScroll: true });
+  $("expandAll").textContent = items.length && items.every((l) => openIds.has(l.id)) ? "모두 접기" : "모두 펼치기";
+  $("expandAll").hidden = !items.length;
 }
 </script>
 </body>
