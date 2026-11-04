@@ -133,6 +133,63 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .letter::before { content: ""; position: absolute; left: 10px; top: 16px; bottom: 16px; width: 2px; border-radius: 2px; background: var(--pen); }
 .letter.them::before { background: var(--rose); }
 .letter.unread { border-color: var(--rose); }
+/* 공책 / 대화 전환 */
+/* 알림 설정 */
+.bell { gap: 12px; }
+.bell-h { margin: 0; font-family: var(--f-letter); font-size: 1.15rem; }
+.bell-p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+.bell-steps { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem; }
+.topic-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.topic-row code { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 0.9rem; overflow-wrap: anywhere; user-select: all; min-width: 0; }
+.bell-opts { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+.bell-opts legend { font-size: 0.8rem; color: var(--ink-soft); padding: 0 4px; }
+.bell-opts label { display: flex; gap: 8px; align-items: center; }
+.who { flex-wrap: wrap; }
+.views { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--sheet); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.views button { background: transparent; color: var(--ink-soft); padding: 8px 10px; font-size: 0.95rem; }
+.views button[aria-pressed="true"] { background: var(--pen); color: var(--sheet); }
+.views button[aria-pressed="true"] .badge { background: var(--sheet); color: var(--pen); }
+
+/* 대화 */
+.chat { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+.chat-log {
+  height: max(360px, calc(100dvh - 300px)); overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--paper);
+}
+.chat-day { align-self: center; font-size: 0.75rem; color: var(--ink-soft); background: var(--sheet); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
+.msg { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
+.msg.me { flex-direction: row-reverse; }
+.msg + .msg.first { margin-top: 8px; }
+.msg-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 78%; }
+.msg.me .msg-col { align-items: flex-end; }
+.msg-name { font-size: 0.76rem; color: var(--ink-soft); margin: 0 0 2px 4px; }
+.bubble {
+  padding: 8px 12px; border-radius: 16px; font-size: 0.96rem; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sheet); color: var(--ink); border: 1px solid var(--line);
+}
+.msg.me .bubble { background: var(--pen); color: var(--sheet); border-color: transparent; }
+.msg.them.first .bubble { border-top-left-radius: 4px; }
+.msg.me.first .bubble { border-top-right-radius: 4px; }
+.bubble.photo { padding: 0; overflow: hidden; border: 0; background: transparent; }
+.bubble.photo .pic { width: min(220px, 60vw); aspect-ratio: auto; min-height: 80px; }
+.bubble.photo .pic img { height: auto; max-height: 300px; object-fit: cover; }
+.msg-side { display: flex; flex-direction: column; align-items: flex-start; font-size: 0.68rem; color: var(--ink-soft); flex: none; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.msg.me .msg-side { align-items: flex-end; }
+.msg-side .one { color: #E0A92E; font-weight: 700; font-size: 0.72rem; }
+.msg-del { all: unset; cursor: pointer; font-size: 0.68rem; color: var(--ink-soft); }
+.msg-del:focus-visible { outline: 2px solid var(--pen); }
+.chat-pending { padding: 8px 12px 0; border-top: 1px solid var(--line); }
+.chat-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.chat-bar textarea {
+  flex: 1; min-width: 0; resize: none; max-height: 8.5rem; border: 1px solid var(--line); border-radius: 18px;
+  background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
+}
+.chat-bar .primary { padding: 9px 16px; }
+.chat-photo { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer; }
+.chat-photo:focus-within { outline: 2px solid var(--pen); outline-offset: 2px; }
+.chat-photo svg { width: 18px; height: 18px; }
+.chat-photo input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
 /* 목록 한 줄 */
 .letter:not(.open) { padding-block: 12px; }
 .letter:not(.open)::before { top: 12px; bottom: 12px; }
@@ -188,7 +245,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
       <h1>우리 둘의 공책</h1>
       <p class="sub">하루 있었던 일, 하고 싶은 말을 적어 두면 서로 읽을 수 있어요.</p>
     </div>
-    <div class="who" id="who" hidden><span id="meName"></span><button type="button" class="ghost" id="logout">나가기</button></div>
+    <div class="who" id="who" hidden><span id="meName"></span><button type="button" class="ghost" id="bellBtn" aria-expanded="false">알림 설정</button><button type="button" class="ghost" id="logout">나가기</button></div>
   </header>
 
   <!-- 1) 로그인 화면 -->
@@ -209,6 +266,51 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
   <div id="app" hidden style="display:flex;flex-direction:column;gap:22px">
     <div class="presence" id="presence" hidden><span class="dot" id="presenceDot"></span><span id="presenceText"></span></div>
 
+    <!-- 알림 설정 (ntfy) -->
+    <section class="card bell" id="bellPanel" hidden>
+      <h2 class="bell-h">휴대폰 알림 받기</h2>
+      <p class="bell-p">공책이 닫혀 있어도 그분이 메시지나 글을 남기면 휴대폰에 알림이 와요. 처음 한 번만 설정하면 돼요.</p>
+      <ol class="bell-steps">
+        <li>휴대폰에 무료 앱 <b>ntfy</b>를 설치해요. (앱스토어·플레이스토어에서 "ntfy" 검색)</li>
+        <li>ntfy를 열고 <b>+</b> 버튼을 눌러요.</li>
+        <li>"Topic name"에 아래 <b>내 알림 주소</b>를 붙여 넣고 <b>Subscribe</b>를 눌러요.
+          <div class="topic-row"><code id="myTopic">만드는 중…</code><button type="button" class="ghost" id="copyTopic">복사</button></div>
+        </li>
+        <li>아래 <b>시험 알림 보내기</b>를 눌러 휴대폰에 알림이 오는지 확인해요.</li>
+      </ol>
+      <fieldset class="bell-opts">
+        <legend>이럴 때 알려 주세요</legend>
+        <label><input type="checkbox" id="optMsg" checked> 대화 메시지가 왔을 때</label>
+        <label><input type="checkbox" id="optNote" checked> 공책에 새 글이나 답글이 달렸을 때</label>
+        <label><input type="checkbox" id="optEnter" checked> 그분이 공책에 들어왔을 때</label>
+        <label><input type="checkbox" id="optPreview"> 알림에 메시지 내용도 보여 주기</label>
+      </fieldset>
+      <div class="row">
+        <span class="count" id="bellState"></span>
+        <button type="button" class="primary" id="testPush">시험 알림 보내기</button>
+      </div>
+    </section>
+
+    <nav class="views" aria-label="화면 바꾸기">
+      <button type="button" data-v="note" aria-pressed="true">공책<span class="badge" id="noteBadge" hidden></span></button>
+      <button type="button" data-v="chat" aria-pressed="false">대화<span class="badge" id="chatBadge" hidden></span></button>
+    </nav>
+
+    <!-- 대화 -->
+    <section class="chat" id="chatView" hidden>
+      <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
+      <div class="pics chat-pending" id="chatPending" hidden></div>
+      <form class="chat-bar" id="chatForm">
+        <label class="chat-photo" aria-label="사진 보내기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg>
+          <input type="file" id="chatPhotoIn" accept="image/*" multiple>
+        </label>
+        <textarea id="chatIn" rows="1" maxlength="1000" placeholder="메시지를 입력하세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
+        <button type="submit" class="primary" id="chatSend" disabled>보내기</button>
+      </form>
+    </section>
+
+    <div id="noteView" style="display:flex;flex-direction:column;gap:22px">
     <!-- 디데이 -->
     <section class="dday" id="dday">
       <div class="dd-main" id="ddMain">
@@ -255,6 +357,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
       <button type="button" class="expand" id="expandAll" hidden>모두 펼치기</button>
     </div>
     <div class="list" id="list"><div class="empty">공책을 펼치는 중이에요…</div></div>
+    </div>
   </div>
 
   <div class="card" id="setupMsg" hidden>
@@ -535,7 +638,7 @@ onAuthStateChanged(auth, (u) => {
   let firstPeople = true;
   unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
     const before = people;
-    people = {}; snap.forEach((d) => (people[d.id] = d.data()));
+    people = {}; snap.forEach((d) => (people[d.id] = d.data({ serverTimestamps: "estimate" })));
     $("meName").textContent = nameOf(u.uid) + " 님";
     // 그분이 처음 들어오면 알려 주기 (들어오고 나가는 건 drawPresence에서)
     if (!firstPeople) {
@@ -547,7 +650,14 @@ onAuthStateChanged(auth, (u) => {
     }
     firstPeople = false;
     drawPresence();
-    if (!(people[u.uid] && people[u.uid].name)) show("nameBox"); else { show("app"); render(); }
+    if (!$("bellPanel").hidden) drawBell();
+    maybePushEnter();
+    if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
+    else {
+      const firstShow = $("app").hidden;
+      show("app");
+      if (firstShow) setView(view); else { render(); renderChat(); }
+    }
   }, denied));
   heartbeat();
 
@@ -580,6 +690,23 @@ onAuthStateChanged(auth, (u) => {
     }
     firstReplies = false; render();
   }, () => {}));
+
+  // 대화 메시지 (최근 300개)
+  firstMsgs = true; msgs = [];
+  unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(300)), (snap) => {
+    msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse();
+    if (!firstMsgs) {
+      for (const c of snap.docChanges()) {
+        const m = c.doc.data();
+        if (c.type === "added" && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
+            && (view !== "chat" || document.visibilityState !== "visible")) {
+          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : (m.text || "").slice(0, 40)));
+        }
+      }
+    }
+    firstMsgs = false; msgsLoaded = true;
+    renderChat(); render();
+  }, () => { msgsLoaded = true; renderChat(); }));
 });
 
 $("nameBox").addEventListener("submit", async (e) => {
@@ -628,6 +755,231 @@ $("photoIn").addEventListener("change", async (e) => {
     catch (err) { toast("이 사진은 열 수 없어요. 다른 사진으로 해 보세요."); }
   }
   drawPending(); updateCount();
+});
+
+// ================= 휴대폰 알림 (ntfy) =================
+// 각자 자기만의 알림 주소(topic)를 people 문서에 저장해 두고,
+// 상대가 글·메시지를 남기면 상대 브라우저가 ntfy.sh 로 내 주소에 알림을 보냄.
+const NTFY = "https://ntfy.sh/";
+const SITE = location.origin + location.pathname;
+function randomTopic() {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789"; const a = new Uint32Array(14); crypto.getRandomValues(a);
+  return "gongchaek-" + [...a].map((n) => abc[n % abc.length]).join("");
+}
+const myP = () => (me && people[me.uid]) || {};
+const myPrefs = () => ({ msg: true, note: true, enter: true, preview: false, ...(myP().notify || {}) });
+
+async function ensureTopic() {
+  if (!me) return "";
+  if (myP().ntfyTopic) return myP().ntfyTopic;
+  const t = randomTopic();
+  try { await setDoc(doc(db, "people", me.uid), { ntfyTopic: t }, { merge: true }); } catch (e) {}
+  return t;
+}
+function drawBell() {
+  if (!me) return;
+  $("myTopic").textContent = myP().ntfyTopic || "만드는 중…";
+  const p = myPrefs();
+  $("optMsg").checked = p.msg; $("optNote").checked = p.note; $("optEnter").checked = p.enter; $("optPreview").checked = p.preview;
+  const oid = otherId();
+  $("bellState").textContent = oid && people[oid].ntfyTopic ? "그분도 알림 설정을 마쳤어요" : "그분은 아직 알림 설정을 안 했어요";
+}
+$("bellBtn").addEventListener("click", async () => {
+  const open = $("bellPanel").hidden;
+  $("bellPanel").hidden = !open;
+  $("bellBtn").setAttribute("aria-expanded", String(open));
+  $("bellBtn").textContent = open ? "닫기" : "알림 설정";
+  if (open) { await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
+$("copyTopic").addEventListener("click", async () => {
+  const t = myP().ntfyTopic; if (!t) return;
+  try { await navigator.clipboard.writeText(t); toast("복사했어요. ntfy에 붙여 넣으세요"); }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($("myTopic")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("글자를 길게 눌러 복사해 주세요"); }
+});
+for (const [id, key] of [["optMsg", "msg"], ["optNote", "note"], ["optEnter", "enter"], ["optPreview", "preview"]]) {
+  $(id).addEventListener("change", () => {
+    if (!me) return;
+    setDoc(doc(db, "people", me.uid), { notify: { ...myPrefs(), [key]: $(id).checked } }, { merge: true }).catch(() => toast("저장하지 못했어요"));
+  });
+}
+async function sendNtfy(topic, title, message, tags) {
+  const res = await fetch(NTFY, {
+    method: "POST",
+    body: JSON.stringify({ topic, title, message, tags: tags ? [tags] : [], click: SITE }),
+  });
+  if (!res.ok) throw new Error("ntfy " + res.status);
+}
+$("testPush").addEventListener("click", async () => {
+  const t = await ensureTopic(); drawBell();
+  try { await sendNtfy(t, "우리 둘의 공책", "시험 알림이에요. 이게 보이면 설정 끝!", "bell"); toast("보냈어요. 휴대폰을 확인해 보세요"); }
+  catch (e) { toast("알림을 보내지 못했어요. 인터넷 연결을 확인해 주세요."); }
+});
+
+// 상대에게 알림 보내기 — 상대가 지금 공책을 보고 있으면 보내지 않음
+function pushOther(kind, text) {
+  const oid = otherId(); if (!oid) return;
+  const o = people[oid];
+  if (!o.ntfyTopic) return;
+  const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
+  if (kind === "msg" && !prefs.msg) return;
+  if ((kind === "letter" || kind === "reply") && !prefs.note) return;
+  if (kind === "enter" && !prefs.enter) return;
+  if (isHere(o)) return;   // 지금 보고 있으면 화면 안내로 충분
+  const myName = nameOf(me.uid);
+  const what = { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
+  const body = prefs.preview && text && kind !== "enter" ? String(text).slice(0, 120) : myName + "님이 " + what;
+  const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave" }[kind];
+  sendNtfy(o.ntfyTopic, prefs.preview && kind !== "enter" ? myName + "님이 " + what : "우리 둘의 공책", body, tag).catch(() => {});
+}
+// 내가 공책에 들어오면 (10분 넘게 비웠다가) 그분께 알림. 마지막으로 본 시각은 이 기기에 기록
+let enterChecked = false;
+const LAST_KEY = "nb-last-open";
+function maybePushEnter() {
+  if (enterChecked || !me || document.visibilityState !== "visible" || !otherId()) return;
+  enterChecked = true;
+  let last = 0; try { last = Number(localStorage.getItem(LAST_KEY)) || 0; } catch (e) {}
+  if (Date.now() - last > 10 * 60 * 1000) pushOther("enter");
+  try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {}
+}
+function stampLastOpen() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} }
+setInterval(() => { if (me && document.visibilityState === "visible") stampLastOpen(); }, 60 * 1000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { if (me) stampLastOpen(); enterChecked = false; }
+  else maybePushEnter();
+});
+
+// ================= 대화 =================
+let msgs = [], firstMsgs = true, msgsLoaded = false, chatPending = [], pickedMsg = null, readWriting = false;
+let view = "note";
+try { if (localStorage.getItem("nb-view") === "chat") view = "chat"; } catch (e) {}
+
+function otherId() { const o = Object.keys(people).find((id) => me && id !== me.uid && people[id].name); return o || null; }
+const myChatRead = () => (me && people[me.uid] && people[me.uid].chatReadAt) ? tms(people[me.uid].chatReadAt) : 0;
+function chatUnread() { if (!me) return 0; const r = myChatRead(); return msgs.filter((m) => m.author !== me.uid && tms(m.createdAt) > r).length; }
+
+function setView(v) {
+  view = v;
+  try { localStorage.setItem("nb-view", v); } catch (e) {}
+  document.querySelectorAll(".views button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  $("noteView").hidden = v !== "note";
+  $("chatView").hidden = v !== "chat";
+  if (v === "chat") { renderChat(true); markChatRead(); }
+  render();
+}
+document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.v)));
+
+// 대화를 보고 있으면 "여기까지 읽음"을 기록 → 상대 화면의 숫자 1이 사라짐
+async function markChatRead() {
+  if (!me || view !== "chat" || document.visibilityState !== "visible" || readWriting) return;
+  if (chatUnread() === 0) return;
+  readWriting = true;
+  try { await setDoc(doc(db, "people", me.uid), { chatReadAt: serverTimestamp() }, { merge: true }); } catch (e) {}
+  readWriting = false;
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") markChatRead(); });
+
+function renderChat(forceBottom) {
+  if (!me) return;
+  const log = $("chatLog");
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  const prevTop = log.scrollTop;
+  log.replaceChildren();
+  if (!msgs.length) {
+    log.append(el("div", "empty", msgsLoaded ? "아직 나눈 대화가 없어요. 아래에 첫 메시지를 보내 보세요." : "대화를 불러오는 중이에요…"));
+    return;
+  }
+  const oid = otherId();
+  const theirRead = oid && people[oid].chatReadAt ? tms(people[oid].chatReadAt) : 0;
+  const minuteKey = (m) => Math.floor(tms(m.createdAt) / 60000);
+  let lastDay = "";
+  msgs.forEach((m, i) => {
+    const t = tms(m.createdAt), day = fmtDay(t);
+    if (day !== lastDay) { log.append(el("div", "chat-day", day)); lastDay = day; }
+    const prev = msgs[i - 1], next = msgs[i + 1];
+    const mine = m.author === me.uid;
+    const first = !prev || prev.author !== m.author || fmtDay(tms(prev.createdAt)) !== day || t - tms(prev.createdAt) > 5 * 60000;
+    const last = !next || next.author !== m.author || minuteKey(next) !== minuteKey(m);
+    const row = el("div", "msg " + (mine ? "me" : "them") + (first ? " first" : ""));
+    const col = el("div", "msg-col");
+    if (!mine && first) col.append(el("span", "msg-name", nameOf(m.author)));
+    let bubble;
+    if (m.photoId) {
+      bubble = el("div", "bubble photo");
+      const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
+      bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
+    } else {
+      bubble = el("div", "bubble", m.text || "");
+      if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
+    }
+    col.append(bubble);
+    const side = el("div", "msg-side");
+    if (mine && !(theirRead && t <= theirRead)) side.append(el("span", "one", "1"));
+    if (last) side.append(el("span", null, fmtTime(t)));
+    if (mine && (pickedMsg === m.id || m.photoId)) {
+      const del = el("button", "msg-del", "지우기"); del.type = "button";
+      if (m.photoId && pickedMsg !== m.id) { del.textContent = "⋯"; del.setAttribute("aria-label", "사진 메뉴"); del.onclick = () => { pickedMsg = m.id; renderChat(); }; }
+      else del.onclick = async () => {
+        pickedMsg = null;
+        try { await deleteDoc(doc(db, "messages", m.id)); if (m.photoId) { try { await deleteDoc(doc(db, "photos", m.photoId)); } catch (e) {} } }
+        catch (e) { toast("지우지 못했어요."); }
+      };
+      side.append(del);
+    }
+    row.append(col, side);
+    log.append(row);
+  });
+  if (forceBottom || nearBottom) log.scrollTop = log.scrollHeight; else log.scrollTop = prevTop;
+  if (view === "chat") markChatRead();
+}
+
+// 입력 칸: 글 길이에 맞춰 늘어남, 컴퓨터에서는 Enter로 보내기(Shift+Enter 줄바꿈)
+const chatIn = $("chatIn");
+function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
+chatIn.addEventListener("input", () => { chatIn.style.height = "auto"; chatIn.style.height = Math.min(chatIn.scrollHeight, 136) + "px"; chatCanSend(); });
+const desktop = window.matchMedia("(pointer: fine)").matches;
+chatIn.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && desktop) { e.preventDefault(); $("chatForm").requestSubmit(); }
+});
+$("chatPhotoIn").addEventListener("change", async (e) => {
+  const files = [...e.target.files]; e.target.value = "";
+  for (const f of files.slice(0, Math.max(0, 6 - chatPending.length))) {
+    try { chatPending.push(await shrink(f)); } catch (err) { toast("이 사진은 열 수 없어요."); }
+  }
+  if (files.length + chatPending.length > 6) toast("사진은 한 번에 6장까지 보낼 수 있어요");
+  drawChatPending(); chatCanSend();
+});
+function drawChatPending() {
+  const box = $("chatPending"); box.replaceChildren(); box.hidden = !chatPending.length;
+  chatPending.forEach((src, i) => {
+    const d = el("div", "pic"); const img = el("img"); img.src = src; img.alt = "보낼 사진 " + (i + 1);
+    const x = el("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", "이 사진 빼기");
+    x.onclick = () => { chatPending.splice(i, 1); drawChatPending(); chatCanSend(); };
+    d.append(img, x); box.append(d);
+  });
+}
+$("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!me) return;
+  const text = chatIn.value.trim(), photos = chatPending.slice();
+  if (!text && !photos.length) return;
+  chatIn.value = ""; chatIn.style.height = "auto"; chatPending = []; drawChatPending(); chatCanSend();
+  chatIn.focus();
+  try {
+    for (const src of photos) {
+      const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: src, createdAt: serverTimestamp() });
+      photoCache[ref.id] = src;
+      await addDoc(collection(db, "messages"), { author: me.uid, photoId: ref.id, createdAt: serverTimestamp() });
+    }
+    if (text) await addDoc(collection(db, "messages"), { author: me.uid, text, createdAt: serverTimestamp() });
+    renderChat(true);
+    pushOther("msg", text ? text : "사진을 보냈어요");
+  } catch (err) {
+    if (text && !chatIn.value) chatIn.value = text;
+    chatCanSend();
+    toast(err && err.code === "permission-denied"
+      ? "메시지를 보낼 수 없어요. Firebase 규칙을 새것으로 바꿨는지 확인해 주세요."
+      : "보내지 못했어요. 인터넷 연결을 확인해 주세요.", 4000);
+  }
 });
 
 function drawPending() {
@@ -680,6 +1032,7 @@ $("compose").addEventListener("submit", async (e) => {
         photoCache[ref.id] = src; ids.push(ref.id);
       }
       await addDoc(collection(db, "letters"), { author: me.uid, title, body, photoIds: ids, createdAt: serverTimestamp() });
+      pushOther("letter", title || body.split("\n")[0] || "사진");
       $("titleIn").value = ""; $("bodyIn").value = ""; pending = []; drawPending();
       try { localStorage.removeItem(DRAFT); } catch (e) {}
       toast("남겼어요");
@@ -763,7 +1116,12 @@ function render() {
   const total = newLetters + newReplies;
   $("unreadBadge").textContent = String(total);
   $("unreadBadge").hidden = total === 0;
-  document.title = (total ? "(" + total + ") " : "") + "우리 둘의 공책";
+  $("noteBadge").textContent = String(total);
+  $("noteBadge").hidden = total === 0 || view === "note";
+  const chatNew = view === "chat" && document.visibilityState === "visible" ? 0 : chatUnread();
+  $("chatBadge").textContent = String(chatNew);
+  $("chatBadge").hidden = chatNew === 0;
+  if (!titleTimer) document.title = (total + chatNew ? "(" + (total + chatNew) + ") " : "") + "우리 둘의 공책";
 
   const list = $("list");
   // 다시 그려도 쓰던 답글이 지워지지 않게 보관
@@ -833,7 +1191,7 @@ function render() {
     f.addEventListener("submit", async (e) => {
       e.preventDefault(); const text = inp.value.trim(); if (!text) return;
       btn.disabled = true;
-      try { await addDoc(collection(db, "replies"), { letterId: l.id, author: me.uid, text, createdAt: serverTimestamp() }); inp.value = ""; }
+      try { await addDoc(collection(db, "replies"), { letterId: l.id, author: me.uid, text, createdAt: serverTimestamp() }); inp.value = ""; pushOther("reply", text); }
       catch (err) { toast("답글을 보내지 못했어요."); }
       btn.disabled = false;
     });
