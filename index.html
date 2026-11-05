@@ -128,10 +128,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .views button[aria-pressed="true"] .badge { background: var(--sheet); color: var(--pen); }
 
 /* 대화 */
-.chat { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+/* 대화는 화면을 꽉 채움 — 높이는 키보드를 뺀 실제 보이는 높이(--vvh)를 따라감 */
+.chat {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 20;
+  height: var(--vvh, 100vh); height: var(--vvh, 100dvh);
+  background: var(--sheet); display: flex; flex-direction: column; overflow: hidden;
+}
+body.chat-open { overflow: hidden; }
+.chat-head {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px)); padding-bottom: 8px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--sheet);
+}
+.chat-back { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--pen); padding: 6px 8px; font-size: 0.95rem; }
+.back-arrow { width: 9px; height: 9px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin-left: 3px; }
+.chat-who { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; font-size: 0.95rem; }
+.chat-who span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-who .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+.chat-who .dot.on { background: #2FA36B; }
 .chat-log {
-  height: max(360px, calc(100dvh - 300px)); overflow-y: auto; overscroll-behavior: contain;
-  padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--paper);
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-block: 14px; display: flex; flex-direction: column; gap: 4px; background: var(--paper);
 }
 .chat-day { align-self: center; font-size: 0.75rem; color: var(--ink-soft); background: var(--sheet); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
 .msg { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
@@ -155,8 +174,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .msg-side .one { color: #E0A92E; font-weight: 700; font-size: 0.72rem; }
 .msg-del { all: unset; cursor: pointer; font-size: 0.68rem; color: var(--ink-soft); }
 .msg-del:focus-visible { outline: 2px solid var(--pen); }
-.chat-pending { padding: 8px 12px 0; border-top: 1px solid var(--line); }
-.chat-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.chat-pending { flex: none; padding: 8px max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); }
+.chat-bar {
+  flex: none; display: flex; align-items: flex-end; gap: 8px; border-top: 1px solid var(--line); background: var(--sheet);
+  padding-top: 10px; padding-bottom: calc(10px + var(--kb-safe, env(safe-area-inset-bottom, 0px)));
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.chat-log > .empty { margin: auto 0; }
 .chat-bar textarea {
   flex: 1; min-width: 0; resize: none; max-height: 8.5rem; border: 1px solid var(--line); border-radius: 18px;
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
@@ -275,6 +299,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 
     <!-- 대화 -->
     <section class="chat" id="chatView" hidden>
+      <div class="chat-head">
+        <button type="button" class="chat-back" id="chatBack" aria-label="공책으로 돌아가기"><span class="back-arrow" aria-hidden="true"></span>공책<span class="badge" id="backBadge" hidden></span></button>
+        <div class="chat-who"><span class="dot" id="chatDot"></span><span id="chatWho">대화</span></div>
+      </div>
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
       <div class="pics chat-pending" id="chatPending" hidden></div>
       <form class="chat-bar" id="chatForm">
@@ -737,10 +765,45 @@ function setView(v) {
   document.querySelectorAll(".views button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
   $("noteView").hidden = v !== "note";
   $("chatView").hidden = v !== "chat";
-  if (v === "chat") { renderChat(true); markChatRead(); }
+  document.body.classList.toggle("chat-open", v === "chat");
+  if (v === "chat") { fitChat(); renderChat(true); markChatRead(); }
   render();
 }
 document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.v)));
+$("chatBack").addEventListener("click", () => { $("chatIn").blur(); setView("note"); window.scrollTo(0, 0); });
+
+// 대화 화면 높이를 "키보드를 뺀 실제로 보이는 부분"에 맞춤 → 입력 칸이 항상 키보드 바로 위에
+function fitChat() {
+  const cv = $("chatView"), vv = window.visualViewport;
+  const h = vv ? vv.height : window.innerHeight;
+  cv.style.setProperty("--vvh", Math.round(h) + "px");
+  cv.style.top = (vv ? Math.max(0, vv.offsetTop) : 0) + "px";
+  // 키보드가 올라와 있으면 아래 안전 여백은 필요 없음
+  const kb = vv && window.innerHeight - vv.height > 120;
+  cv.style.setProperty("--kb-safe", kb ? "0px" : "env(safe-area-inset-bottom, 0px)");
+}
+if (window.visualViewport) {
+  const onVV = () => {
+    if (view !== "chat") return;
+    const log = $("chatLog");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+    fitChat();
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  };
+  window.visualViewport.addEventListener("resize", onVV);
+  window.visualViewport.addEventListener("scroll", onVV);
+}
+window.addEventListener("resize", () => { if (view === "chat") fitChat(); });
+$("chatIn").addEventListener("focus", () => {
+  // 키보드가 다 올라온 뒤 맨 아래 대화가 보이게
+  setTimeout(() => { fitChat(); const log = $("chatLog"); log.scrollTop = log.scrollHeight; window.scrollTo(0, 0); }, 300);
+});
+function syncChatHead() {
+  const oid = otherId();
+  const p = oid ? people[oid] : null;
+  $("chatWho").textContent = p ? (isHere(p) ? p.name + " · 지금 보고 있어요" : p.name) : "대화";
+  $("chatDot").classList.toggle("on", !!(p && isHere(p)));
+}
 
 // 대화를 보고 있으면 "여기까지 읽음"을 기록 → 상대 화면의 숫자 1이 사라짐
 async function markChatRead() {
@@ -754,6 +817,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 function renderChat(forceBottom) {
   if (!me) return;
+  syncChatHead();
   const log = $("chatLog");
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
   const prevTop = log.scrollTop;
@@ -992,6 +1056,8 @@ function render() {
   $("unreadBadge").hidden = total === 0;
   $("noteBadge").textContent = String(total);
   $("noteBadge").hidden = total === 0 || view === "note";
+  $("backBadge").textContent = String(total);
+  $("backBadge").hidden = total === 0;
   const chatNew = view === "chat" && document.visibilityState === "visible" ? 0 : chatUnread();
   $("chatBadge").textContent = String(chatNew);
   $("chatBadge").hidden = chatNew === 0;
