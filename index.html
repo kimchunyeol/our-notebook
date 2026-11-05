@@ -44,29 +44,6 @@ h1 { font-family: var(--f-letter); font-weight: 700; font-size: 1.9rem; margin: 
 .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 2px 0 0; }
 .who { font-size: 0.85rem; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; }
 
-/* 디데이 */
-.dday { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 12px; }
-.dd-main { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
-.dd-label { margin: 0; font-size: 0.85rem; color: var(--ink-soft); letter-spacing: 0.04em; }
-.dd-num { margin: 0; font-family: var(--f-letter); font-weight: 700; font-size: 2.6rem; line-height: 1.15; color: var(--rose); font-variant-numeric: tabular-nums; }
-.dd-unit { font-size: 1.2rem; margin-left: 4px; color: var(--ink); }
-.dd-since { margin: 0; font-size: 0.82rem; color: var(--ink-soft); }
-.dd-next { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
-.dd-next li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.9rem; }
-.dd-next .nm { min-width: 0; overflow-wrap: anywhere; }
-.dd-next .dt { color: var(--ink-soft); font-size: 0.78rem; margin-left: 6px; }
-.dd-next .cnt { font-weight: 700; color: var(--pen); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dd-next .today .cnt { color: var(--rose); }
-.dd-foot { display: flex; justify-content: flex-end; }
-.dd-edit { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
-.dd-edit input[type="date"] { font-family: var(--f-ui); }
-.dd-list { display: flex; flex-direction: column; gap: 6px; }
-.dd-list .item { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.9rem; }
-.dd-list .item span { min-width: 0; overflow-wrap: anywhere; }
-.dd-add { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
-.dd-add .dd-check, .dd-add button { grid-column: span 2; }
-@media (max-width: 420px) { .dd-add { grid-template-columns: 1fr; } .dd-add .dd-check, .dd-add button { grid-column: auto; } }
-.dd-check { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-soft); }
 .presence { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--ink-soft); margin-top: -8px; }
 .presence .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
 .presence.on .dot { background: #2FA36B; box-shadow: 0 0 0 3px rgba(47,163,107,.2); }
@@ -311,26 +288,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
     </section>
 
     <div id="noteView" style="display:flex;flex-direction:column;gap:22px">
-    <!-- 디데이 -->
-    <section class="dday" id="dday">
-      <div class="dd-main" id="ddMain">
-        <p class="dd-label">우리 만난 지</p>
-        <p class="dd-num"><span id="ddDays">–</span><span class="dd-unit">일</span></p>
-        <p class="dd-since" id="ddSince">처음 만난 날을 정해 주세요</p>
-      </div>
-      <ul class="dd-next" id="ddNext"></ul>
-      <div class="dd-foot"><button type="button" class="ghost" id="ddToggle" aria-expanded="false">기념일 정하기</button></div>
-      <div class="dd-edit" id="ddEdit" hidden>
-        <label class="field">처음 만난 날<input type="date" id="ddStart"></label>
-        <div class="dd-list" id="ddList"></div>
-        <div class="dd-add">
-          <label class="field">기념일 이름<input id="ddName" maxlength="20" placeholder="예: 여리 생일" autocomplete="off"></label>
-          <label class="field">날짜<input type="date" id="ddDate"></label>
-          <label class="dd-check"><input type="checkbox" id="ddYearly" checked> 매년 돌아와요</label>
-          <button type="button" class="primary" id="ddAddBtn">기념일 추가</button>
-        </div>
-      </div>
-    </section>
     <form class="card compose" id="compose">
       <input class="t" id="titleIn" maxlength="80" placeholder="제목 (안 써도 돼요)" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
       <textarea id="bodyIn" maxlength="5000" placeholder="오늘 하고 싶은 말을 적어 보세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
@@ -382,7 +339,7 @@ const firebaseConfig = {
 // ================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence }
+import { initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -391,9 +348,11 @@ const $ = (id) => document.getElementById(id);
 const show = (id) => ["loginBox", "nameBox", "app", "setupMsg"].forEach((x) => { if ($(x)) $(x).hidden = x !== id; });
 
 const fb = initializeApp(firebaseConfig);
-const auth = getAuth(fb);
+// 로그인 상태를 두 군데(IndexedDB, localStorage)에 저장해서 홈 화면 앱에서도 잘 유지되게 함
+const auth = initializeAuth(fb, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 const db = getFirestore(fb);
-setPersistence(auth, browserLocalPersistence).catch(() => {});
+// 공책에 들어올 수 있는 두 사람 (보안 규칙과 같은 값)
+const ALLOWED = ["qmVx6n6HHBWKuoKDXThYYf1EFYp1", "oltwfB3UHyXE6uyXOqwfbOADHzg1"];
 
 const MAX_PHOTOS = 4;
 let me = null, people = {}, letters = [], replies = [], filter = "all";
@@ -499,108 +458,6 @@ function drawPresence() {
 }
 setInterval(drawPresence, 20 * 1000);
 
-// ---- 디데이 ----
-// 두 사람이 같이 쓰는 기념일 정보: settings/couple 문서 하나에 { startDate, events:[{id,name,date,yearly}] }
-let couple = { startDate: "", events: [] };
-const DAY = 86400000;
-const pad = (n) => String(n).padStart(2, "0");
-const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-function parseYMD(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
-function today0() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
-const diffDays = (a, b) => Math.round((b - a) / DAY);   // 날짜 차이 (서머타임 없는 한국 기준)
-const fmtShort = (d) => d.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
-function nextYearly(base, from) {
-  let d = new Date(from.getFullYear(), base.getMonth(), base.getDate());
-  if (base.getMonth() === 1 && base.getDate() === 29 && d.getMonth() !== 1) d = new Date(from.getFullYear(), 1, 28);
-  if (d < from) d = new Date(from.getFullYear() + 1, base.getMonth(), base.getDate());
-  return d;
-}
-const coupleRef = () => doc(db, "settings", "couple");
-
-function upcoming() {
-  const t = today0(), out = [];
-  const start = parseYMD(couple.startDate);
-  if (start) {
-    const dayN = diffDays(start, t) + 1;               // 만난 날 = 1일
-    // 다음 100일 단위
-    const next100 = Math.max(100, Math.ceil(dayN / 100) * 100);
-    const d100 = new Date(start.getTime()); d100.setDate(d100.getDate() + next100 - 1);
-    out.push({ name: next100 + "일", date: d100 });
-    // 다음 주년
-    let yrs = Math.max(1, t.getFullYear() - start.getFullYear());
-    let ann = new Date(start.getFullYear() + yrs, start.getMonth(), start.getDate());
-    while (ann < t) { yrs++; ann = new Date(start.getFullYear() + yrs, start.getMonth(), start.getDate()); }
-    out.push({ name: yrs + "주년", date: ann });
-  }
-  for (const e of couple.events || []) {
-    const base = parseYMD(e.date); if (!base) continue;
-    const d = e.yearly ? nextYearly(base, t) : base;
-    out.push({ name: e.name, date: d, past: !e.yearly && d < t });
-  }
-  return out
-    .filter((x) => !x.past)
-    .sort((a, b) => a.date - b.date)
-    .slice(0, 4);
-}
-
-function drawDday() {
-  const t = today0(), start = parseYMD(couple.startDate);
-  if (start && start <= t) {
-    $("ddDays").textContent = (diffDays(start, t) + 1).toLocaleString("ko-KR");
-    $("ddSince").textContent = fmtShort(start) + "부터";
-  } else if (start) {
-    $("ddDays").textContent = "D-" + diffDays(t, start);
-    $("ddSince").textContent = fmtShort(start) + "에 만나요";
-  } else {
-    $("ddDays").textContent = "–";
-    $("ddSince").textContent = "아래 '기념일 정하기'에서 처음 만난 날을 정해 주세요";
-  }
-  const ul = $("ddNext"); ul.replaceChildren();
-  for (const x of upcoming()) {
-    const n = diffDays(t, x.date);
-    const li = el("li", n === 0 ? "today" : null);
-    const left = el("span", "nm", x.name); left.append(el("span", "dt", x.date.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })));
-    li.append(left, el("span", "cnt", n === 0 ? "오늘이에요" : "D-" + n));
-    ul.append(li);
-  }
-  ul.hidden = ul.children.length === 0;
-
-  // 편집 칸
-  if (document.activeElement !== $("ddStart")) $("ddStart").value = couple.startDate || "";
-  const list = $("ddList"); list.replaceChildren();
-  for (const e of couple.events || []) {
-    const row = el("div", "item");
-    row.append(el("span", null, e.name + " · " + e.date.replace(/-/g, ".") + (e.yearly ? " (매년)" : "")));
-    const x = el("button", "ghost", "빼기"); x.type = "button";
-    x.onclick = () => saveCouple({ events: (couple.events || []).filter((v) => v.id !== e.id) });
-    row.append(x); list.append(row);
-  }
-}
-async function saveCouple(patch) {
-  try { await setDoc(coupleRef(), patch, { merge: true }); }
-  catch (e) { toast("기념일을 저장하지 못했어요. Firebase 규칙을 새것으로 바꿨는지 확인해 주세요.", 4000); }
-}
-$("ddToggle").addEventListener("click", () => {
-  const open = $("ddEdit").hidden;
-  $("ddEdit").hidden = !open;
-  $("ddToggle").setAttribute("aria-expanded", String(open));
-  $("ddToggle").textContent = open ? "닫기" : "기념일 정하기";
-});
-$("ddStart").addEventListener("change", () => {
-  const v = $("ddStart").value;
-  if (v && parseYMD(v)) { saveCouple({ startDate: v }); toast("처음 만난 날을 저장했어요"); }
-});
-$("ddAddBtn").addEventListener("click", () => {
-  const name = $("ddName").value.trim(), date = $("ddDate").value;
-  if (!name || !parseYMD(date)) { toast("기념일 이름과 날짜를 모두 적어 주세요"); return; }
-  const events = [...(couple.events || []), { id: Date.now().toString(36), name, date, yearly: $("ddYearly").checked }];
-  saveCouple({ events });
-  $("ddName").value = ""; $("ddDate").value = ""; $("ddYearly").checked = true;
-  toast("기념일을 추가했어요");
-});
-// 자정이 지나면 숫자를 바꿔 주기
-setInterval(() => { if (me) drawDday(); }, 60 * 1000);
-
 // ---- 로그인 ----
 $("loginBox").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -608,16 +465,38 @@ $("loginBox").addEventListener("submit", async (e) => {
   try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
+// 나가기는 실수로 누르지 않게 한 번 더 확인
+let logoutArmed = null;
 $("logout").addEventListener("click", async () => {
+  if (!logoutArmed) {
+    $("logout").textContent = "정말 나갈까요? 한 번 더 누르세요";
+    $("logout").classList.add("danger");
+    logoutArmed = setTimeout(() => { logoutArmed = null; $("logout").textContent = "나가기"; $("logout").classList.remove("danger"); }, 4000);
+    return;
+  }
+  clearTimeout(logoutArmed); logoutArmed = null;
   markSeenNow();
   if (heartbeat.write) { try { await heartbeat.write(false, "logout"); } catch (e) {} }
   signOut(auth).then(() => location.reload());
 });
 
 const DENIED_MSG = "이 계정은 공책에 들어올 수 없어요. 보안 규칙에 이 계정의 UID가 들어 있는지 확인해 주세요.";
-function denied() {
-  try { sessionStorage.setItem("nb-denied", "1"); } catch (e) {}
-  signOut(auth).then(() => location.reload());
+// 불러오기가 실패했을 때: 두 사람이 아닌 계정만 내보내고, 두 사람은 잠시 뒤 다시 연결 (로그아웃시키지 않음)
+let retryTimer = null, retries = 0;
+function denied(err) {
+  if (me && !ALLOWED.includes(me.uid)) {
+    try { sessionStorage.setItem("nb-denied", "1"); } catch (e) {}
+    signOut(auth).then(() => location.reload());
+    return;
+  }
+  if (retryTimer || !me) return;
+  retries++;
+  toast("연결이 잠깐 끊겼어요. 다시 연결하는 중이에요…", 4000);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (me && retries <= 6) startSession(me);
+    else if (me) toast("연결이 안 돼요. 인터넷을 확인하고 앱을 다시 열어 주세요.", 6000);
+  }, Math.min(30000, 3000 * retries));
 }
 try {
   if (sessionStorage.getItem("nb-denied")) {
@@ -626,7 +505,8 @@ try {
   }
 } catch (e) {}
 
-onAuthStateChanged(auth, (u) => {
+onAuthStateChanged(auth, (u) => { retries = 0; startSession(u); });
+function startSession(u) {
   unsubs.forEach((f) => f()); unsubs = [];
   me = u; loaded = false; letters = []; replies = []; firstLetters = true; firstReplies = true;
   if (!u) { $("who").hidden = true; show("loginBox"); return; }
@@ -660,12 +540,6 @@ onAuthStateChanged(auth, (u) => {
     }
   }, denied));
   heartbeat();
-
-  unsubs.push(onSnapshot(coupleRef(), (snap) => {
-    couple = snap.exists() ? { startDate: "", events: [], ...snap.data() } : { startDate: "", events: [] };
-    drawDday();
-  }, () => { drawDday(); }));
-  drawDday();
 
   unsubs.push(onSnapshot(query(collection(db, "letters"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
     letters = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -707,7 +581,7 @@ onAuthStateChanged(auth, (u) => {
     firstMsgs = false; msgsLoaded = true;
     renderChat(); render();
   }, () => { msgsLoaded = true; renderChat(); }));
-});
+}
 
 $("nameBox").addEventListener("submit", async (e) => {
   e.preventDefault();
