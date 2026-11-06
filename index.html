@@ -403,7 +403,15 @@ function markSeenNow() { if (!me) return; try { localStorage.setItem(seenKey(), 
 // 공책을 닫거나 다른 앱으로 넘어갈 때 "여기까지 읽음"으로 기록
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") markSeenNow(); });
 window.addEventListener("pagehide", markSeenNow);
-const isNew = (item) => item.author !== me.uid && item.createdAt && tms(item.createdAt) > seenBefore;
+// 읽은 글: 펼쳐 본 글·답글 id (이 기기에 저장) → "새 글" 표시가 사라짐
+let readIds = new Set();
+const readKey = () => "nb-read-" + me.uid;
+function loadRead() { try { readIds = new Set(JSON.parse(localStorage.getItem(readKey()) || "[]")); } catch (e) { readIds = new Set(); } }
+function saveRead() { try { localStorage.setItem(readKey(), JSON.stringify([...readIds].slice(-500))); } catch (e) {} }
+// 확인한 숫자: 탭을 눌러 본 글·답글 id → 탭 숫자에서만 빠짐 (표시는 남음)
+const ackIds = new Set();
+const isNew = (item) => item.author !== me.uid && item.createdAt && tms(item.createdAt) > seenBefore && !readIds.has(item.id);
+const countNew = (item) => isNew(item) && !ackIds.has(item.id);
 
 // ---- 지금 들어와 있는지 (접속 표시) ----
 // 공책을 보고 있는 동안 1분마다 "여기 있어요"를 기록하고, 닫으면 "나갔어요"를 기록
@@ -531,7 +539,7 @@ function startSession(u) {
   if (!u) { $("who").hidden = true; show("loginBox"); return; }
   // 로그인하면 비밀번호 칸을 없애서 암호 자동완성 창이 다시 뜨지 않게 함
   const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
-  seenBefore = loadSeen();
+  seenBefore = loadSeen(); loadRead();
   $("who").hidden = false;
 
   let firstPeople = true;
@@ -985,9 +993,19 @@ function startEdit(l) {
   $("compose").scrollIntoView({ behavior: "smooth", block: "start" }); $("bodyIn").focus();
 }
 
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+document.querySelectorAll(".tabs button[data-f]").forEach((b) => b.addEventListener("click", () => {
   filter = b.dataset.f;
-  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  document.querySelectorAll(".tabs button[data-f]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  // 탭을 눌렀으니 그 탭의 숫자는 확인한 것으로 (새 글·새 답글 표시는 펼쳐 읽을 때까지 남음)
+  if (me && filter !== "all") {
+    const authorOf = {}; letters.forEach((l) => (authorOf[l.id] = l.author));
+    const mineTab = filter === "me";
+    letters.forEach((l) => { if (!mineTab && isNew(l)) ackIds.add(l.id); });
+    replies.forEach((r) => {
+      if (!isNew(r) || !authorOf[r.letterId]) return;
+      if ((authorOf[r.letterId] === me.uid) === mineTab) ackIds.add(r.id);
+    });
+  }
   render();
 }));
 
@@ -1041,10 +1059,10 @@ function render() {
   // 안 읽은 수
   // 새 글·새 답글을 실제로 그 글이 있는 탭에 나눠서 셈
   const authorOf = {}; letters.forEach((l) => (authorOf[l.id] = l.author));
-  const newReplyList = replies.filter((r) => isNew(r) && authorOf[r.letterId]);   // 지워진 글의 답글은 빼기
+  const newReplyList = replies.filter((r) => countNew(r) && authorOf[r.letterId]);   // 지워진 글의 답글은 빼기
   const onMine = newReplyList.filter((r) => authorOf[r.letterId] === me.uid).length;     // 내 글에 달린 새 답글
   const onTheirs = newReplyList.length - onMine;                                          // 그분 글에 달린 새 답글
-  const inThem = letters.filter(isNew).length + onTheirs;
+  const inThem = letters.filter(countNew).length + onTheirs;
   const total = inThem + onMine;
   $("myBadge").textContent = String(onMine);
   $("myBadge").hidden = onMine === 0;
@@ -1098,7 +1116,15 @@ function render() {
     if (myReplies.length) info.append(el("span", null, "답글 " + myReplies.length));
     const chev = el("span", "chev"); chev.setAttribute("aria-hidden", "true");
     sum.append(top, ttl, info, chev);
-    sum.onclick = () => { if (openIds.has(l.id)) openIds.delete(l.id); else openIds.add(l.id); render(); };
+    sum.onclick = () => {
+      if (openIds.has(l.id)) openIds.delete(l.id);
+      else {
+        openIds.add(l.id);
+        // 펼쳐서 읽었으니 이 글과 답글의 "새" 표시를 없앰
+        if (unread || newReply) { readIds.add(l.id); myReplies.forEach((r) => readIds.add(r.id)); saveRead(); }
+      }
+      render();
+    };
     card.append(sum);
     if (!open) { list.append(card); continue; }
 
