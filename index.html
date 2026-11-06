@@ -695,10 +695,10 @@ for (const [id, key] of [["optMsg", "msg"], ["optNote", "note"], ["optEnter", "e
     setDoc(doc(db, "people", me.uid), { notify: { ...myPrefs(), [key]: $(id).checked } }, { merge: true }).catch(() => toast("저장하지 못했어요"));
   });
 }
-async function sendNtfy(topic, title, message, tags) {
+async function sendNtfy(topic, title, message, tags, click) {
   const res = await fetch(NTFY, {
     method: "POST",
-    body: JSON.stringify({ topic, title, message, tags: tags ? [tags] : [], click: SITE }),
+    body: JSON.stringify({ topic, title, message, tags: tags ? [tags] : [], click: click || SITE }),
   });
   if (!res.ok) throw new Error("ntfy " + res.status);
 }
@@ -722,7 +722,9 @@ function pushOther(kind, text) {
   const what = { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
   const body = prefs.preview && text && kind !== "enter" ? String(text).slice(0, 120) : myName + "님이 " + what;
   const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave" }[kind];
-  sendNtfy(o.ntfyTopic, prefs.preview && kind !== "enter" ? myName + "님이 " + what : "우리 둘의 공책", body, tag).catch(() => {});
+  // 알림을 누르면 메시지는 대화 화면, 글·답글은 공책 화면으로 바로 열림
+  const click = SITE + (kind === "msg" ? "#chat" : "#note");
+  sendNtfy(o.ntfyTopic, prefs.preview && kind !== "enter" ? myName + "님이 " + what : "우리 둘의 공책", body, tag, click).catch(() => {});
 }
 // 내가 공책에 들어오면 (10분 넘게 비웠다가) 그분께 알림. 마지막으로 본 시각은 이 기기에 기록
 let enterChecked = false;
@@ -745,6 +747,11 @@ document.addEventListener("visibilitychange", () => {
 let msgs = [], firstMsgs = true, msgsLoaded = false, chatPending = [], pickedMsg = null, readWriting = false;
 let view = "note";
 try { if (localStorage.getItem("nb-view") === "chat") view = "chat"; } catch (e) {}
+// 알림에서 들어온 경우 (#chat / #note) 그 화면으로 바로
+if (location.hash === "#chat" || location.hash === "#note") {
+  view = location.hash.slice(1);
+  try { history.replaceState(null, "", location.pathname); } catch (e) {}
+}
 
 function otherId() { const o = Object.keys(people).find((id) => me && id !== me.uid && people[id].name); return o || null; }
 const myChatRead = () => (me && people[me.uid] && people[me.uid].chatReadAt) ? tms(people[me.uid].chatReadAt) : 0;
