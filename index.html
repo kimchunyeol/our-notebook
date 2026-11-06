@@ -536,17 +536,9 @@ function startSession(u) {
 
   let firstPeople = true;
   unsubs.push(onSnapshot(collection(db, "people"), (snap) => {
-    const before = people;
     people = {}; snap.forEach((d) => (people[d.id] = d.data({ serverTimestamps: "estimate" })));
     $("meName").textContent = nameOf(u.uid) + " 님";
-    // 그분이 처음 들어오면 알려 주기 (들어오고 나가는 건 drawPresence에서)
-    if (!firstPeople) {
-      for (const [id, p] of Object.entries(people)) {
-        if (id === u.uid || !p.name) continue;
-        const was = before[id] || {};
-        if (!was.name) { toast(p.name + "님이 공책에 처음 들어왔어요", 6000); wasHere[id] = isHere(p); }
-      }
-    }
+    // "처음 들어왔어요" 안내는 없앰 — 들어올 때 안내는 drawPresence에서만
     firstPeople = false;
     drawPresence();
     if (!$("bellPanel").hidden) drawBell();
