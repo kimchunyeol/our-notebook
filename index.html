@@ -441,10 +441,7 @@ function checkComings() {
     if (id === me.uid || !p.name) continue;
     const now = isHere(p), before = wasHere[id];
     if (presenceReady && before !== undefined && now !== before) {
-      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");
-      else if (p.leftBy === "logout") alertPerson(p.name + "님이 '나가기'를 눌러 공책에서 나갔어요");
-      else if (!p.here) alertPerson(p.name + "님이 공책을 나갔어요");
-      else alertPerson(p.name + "님 연결이 끊겼어요. 공책을 나간 것 같아요");
+      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");   // 나갈 때는 알리지 않음
     }
     wasHere[id] = now;
   }
@@ -469,19 +466,13 @@ function drawPresence() {
   checkComings();
   const other = Object.entries(people).find(([id, p]) => id !== me.uid && p.name);
   const box = $("presence");
-  if (!other) {
-    box.hidden = false; box.classList.remove("on");
-    $("presenceText").textContent = "아직 상대방이 공책에 들어오지 않았어요";
-    return;
-  }
-  const p = other[1];
-  box.hidden = false;
-  if (isHere(p)) { box.classList.add("on"); $("presenceText").textContent = p.name + "님이 지금 공책을 보고 있어요"; }
-  else {
-    box.classList.remove("on");
-    $("presenceText").textContent = p.lastActive
-      ? p.name + "님 마지막 접속 " + ago(tms(p.lastActive)) + (p.leftBy === "logout" ? " · 나가기를 눌렀어요" : "")
-      : p.name + "님은 아직 접속 기록이 없어요";
+  // 그분이 지금 들어와 있을 때만 보여 줌
+  const p = other && other[1];
+  if (p && isHere(p)) {
+    box.hidden = false; box.classList.add("on");
+    $("presenceText").textContent = p.name + "님이 지금 공책을 보고 있어요";
+  } else {
+    box.hidden = true; box.classList.remove("on");
   }
 }
 setInterval(drawPresence, 20 * 1000);
