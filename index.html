@@ -337,7 +337,7 @@ body.chat-open { overflow: hidden; }
     </form>
     <div class="tabs" role="group" aria-label="보기">
       <button type="button" data-f="all" aria-pressed="true">모두</button>
-      <button type="button" data-f="me" aria-pressed="false">내가 쓴 글</button>
+      <button type="button" data-f="me" aria-pressed="false">내가 쓴 글<span class="badge" id="myBadge" hidden></span></button>
       <button type="button" data-f="them" aria-pressed="false">받은 글<span class="badge" id="unreadBadge" hidden></span></button>
       <button type="button" class="expand" id="expandAll" hidden>모두 펼치기</button>
     </div>
@@ -1047,11 +1047,17 @@ function render() {
   if (!me) return;
 
   // 안 읽은 수
-  const newLetters = letters.filter(isNew).length;
-  const newReplies = replies.filter(isNew).length;
-  const total = newLetters + newReplies;
-  $("unreadBadge").textContent = String(total);
-  $("unreadBadge").hidden = total === 0;
+  // 새 글·새 답글을 실제로 그 글이 있는 탭에 나눠서 셈
+  const authorOf = {}; letters.forEach((l) => (authorOf[l.id] = l.author));
+  const newReplyList = replies.filter((r) => isNew(r) && authorOf[r.letterId]);   // 지워진 글의 답글은 빼기
+  const onMine = newReplyList.filter((r) => authorOf[r.letterId] === me.uid).length;     // 내 글에 달린 새 답글
+  const onTheirs = newReplyList.length - onMine;                                          // 그분 글에 달린 새 답글
+  const inThem = letters.filter(isNew).length + onTheirs;
+  const total = inThem + onMine;
+  $("myBadge").textContent = String(onMine);
+  $("myBadge").hidden = onMine === 0;
+  $("unreadBadge").textContent = String(inThem);
+  $("unreadBadge").hidden = inThem === 0;
   $("noteBadge").textContent = String(total);
   $("noteBadge").hidden = total === 0 || view === "note";
   $("backBadge").textContent = String(total);
