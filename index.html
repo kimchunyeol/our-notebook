@@ -1128,10 +1128,13 @@ function render() {
     f.append(inp, btn);
     f.addEventListener("submit", async (e) => {
       e.preventDefault(); const text = inp.value.trim(); if (!text) return;
-      btn.disabled = true;
-      try { await addDoc(collection(db, "replies"), { letterId: l.id, author: me.uid, text, createdAt: serverTimestamp() }); inp.value = ""; pushOther("reply", text); }
-      catch (err) { toast("답글을 보내지 못했어요."); }
-      btn.disabled = false;
+      // 화면이 새로 그려지기 전에 칸부터 비움 (보낸 글이 다시 채워지지 않게)
+      inp.value = "";
+      try { await addDoc(collection(db, "replies"), { letterId: l.id, author: me.uid, text, createdAt: serverTimestamp() }); pushOther("reply", text); }
+      catch (err) {
+        const cur = $(inp.id); if (cur && !cur.value) cur.value = text;   // 실패하면 쓴 글을 되돌려 줌
+        toast("답글을 보내지 못했어요.");
+      }
     });
     box.append(f); card.append(box);
 
