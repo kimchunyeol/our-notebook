@@ -171,6 +171,8 @@ body.chat-open { overflow: hidden; }
 .msg.me.first .bubble { border-top-right-radius: 4px; }
 .bubble.photo { padding: 0; overflow: hidden; border: 0; background: transparent; }
 .bubble.expired, .msg.me .bubble.expired { background: transparent; color: var(--ink-soft); border: 1px dashed var(--line); font-size: 0.85rem; }
+a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.msg.me .bubble a.link { color: inherit; }
 .msg-expire { font-size: 0.7rem; color: var(--ink-soft); padding: 0 4px; }
 .pending-note { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--ink-soft); }
 .bubble.photo .pic { width: min(220px, 60vw); aspect-ratio: auto; min-height: 80px; }
@@ -891,7 +893,7 @@ function renderChat(forceBottom) {
       const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
       if (left <= 2) col.append(el("span", "msg-expire", left <= 1 ? "오늘 지워져요" : left + "일 뒤 지워져요"));
     } else {
-      bubble = el("div", "bubble", m.text || "");
+      bubble = elLinked("div", "bubble", m.text || "");
       if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
     }
     col.append(bubble);
@@ -1118,6 +1120,35 @@ function fillPic(btn) {
 
 // ---- 화면 그리기 ----
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+// 글 속 링크(https://…, www.…)를 눌러서 브라우저로 열 수 있게 바꿈
+const LINK_RE = /\b((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+function linkify(text) {
+  const frag = document.createDocumentFragment();
+  const s = String(text || "");
+  let last = 0, m;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(s))) {
+    let url = m[1];
+    // 문장 끝 마침표·괄호 등은 링크에서 빼기
+    const trail = url.match(/[.,!?;:)\]}'"…]+$/);
+    if (trail) url = url.slice(0, -trail[0].length);
+    if (m.index > last) frag.append(s.slice(last, m.index));
+    const a = document.createElement("a");
+    a.href = /^https?:\/\//i.test(url) ? url : "https://" + url;
+    a.textContent = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "link";
+    a.addEventListener("click", (e) => e.stopPropagation());   // 말풍선 메뉴가 열리지 않게
+    frag.append(a);
+    last = m.index + url.length;
+    LINK_RE.lastIndex = last;
+  }
+  if (last < s.length) frag.append(s.slice(last));
+  return frag;
+}
+function elLinked(tag, cls, text) { const e = el(tag, cls); e.append(linkify(text)); return e; }
 const openIds = new Set();   // 펼쳐 둔 글
 function visibleLetters() {
   if (filter === "me") return letters.filter((l) => l.author === me.uid);
@@ -1207,7 +1238,7 @@ function render() {
     if (!open) { list.append(card); continue; }
 
     // 펼쳤을 때: 본문 전체, 사진, 답글
-    if (l.body) card.append(el("p", "body", l.body));
+    if (l.body) card.append(elLinked("p", "body", l.body));
     if (pids.length) {
       const grid = el("div", "pics" + (pids.length === 1 ? " one" : ""));
       for (const id of pids) {
@@ -1220,7 +1251,7 @@ function render() {
     const box = el("div", "replies");
     for (const r of myReplies) {
       const p = el("p", "reply");
-      p.append(el("span", "rn", nameOf(r.author)), document.createTextNode(r.text || ""), el("span", "rt", fmtTime(tms(r.createdAt))));
+      p.append(el("span", "rn", nameOf(r.author)), linkify(r.text || ""), el("span", "rt", fmtTime(tms(r.createdAt))));
       if (isNew(r)) p.append(el("span", "chip", "새 답글"));
       box.append(p);
     }
