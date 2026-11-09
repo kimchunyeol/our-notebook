@@ -118,6 +118,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .bell-steps { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem; }
 .topic-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 .topic-row code { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 0.9rem; overflow-wrap: anywhere; user-select: all; min-width: 0; }
+.badge-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.92rem; }
+.badge-row > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.badge-row .ghost { flex: none; }
 .bell-opts { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .bell-opts legend { font-size: 0.8rem; color: var(--ink-soft); padding: 0 4px; }
 .bell-opts label { display: flex; gap: 8px; align-items: center; }
@@ -167,6 +170,9 @@ body.chat-open { overflow: hidden; }
 .msg.them.first .bubble { border-top-left-radius: 4px; }
 .msg.me.first .bubble { border-top-right-radius: 4px; }
 .bubble.photo { padding: 0; overflow: hidden; border: 0; background: transparent; }
+.bubble.expired, .msg.me .bubble.expired { background: transparent; color: var(--ink-soft); border: 1px dashed var(--line); font-size: 0.85rem; }
+.msg-expire { font-size: 0.7rem; color: var(--ink-soft); padding: 0 4px; }
+.pending-note { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--ink-soft); }
 .bubble.photo .pic { width: min(220px, 60vw); aspect-ratio: auto; min-height: 80px; }
 .bubble.photo .pic img { height: auto; max-height: 300px; object-fit: cover; }
 .msg-side { display: flex; flex-direction: column; align-items: flex-start; font-size: 0.68rem; color: var(--ink-soft); flex: none; line-height: 1.3; font-variant-numeric: tabular-nums; }
@@ -279,6 +285,13 @@ body.chat-open { overflow: hidden; }
         </li>
         <li>아래 <b>시험 알림 보내기</b>를 눌러 휴대폰에 알림이 오는지 확인해요.</li>
       </ol>
+      <div class="badge-row" id="badgeRow">
+        <div>
+          <b>앱 아이콘에 숫자 표시</b>
+          <p class="bell-p" id="badgeState">홈 화면이나 독에 추가한 공책 앱 아이콘에 새 글·대화 수를 보여 줘요.</p>
+        </div>
+        <button type="button" class="ghost" id="badgeBtn">켜기</button>
+      </div>
       <fieldset class="bell-opts">
         <legend>이럴 때 알려 주세요</legend>
         <label><input type="checkbox" id="optMsg" checked> 대화 메시지가 왔을 때</label>
@@ -369,7 +382,7 @@ const firebaseConfig = {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, onSnapshot, query, orderBy, limit, serverTimestamp }
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, getDocs, onSnapshot, query, where, orderBy, limit, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -597,6 +610,7 @@ function startSession(u) {
         }
       }
     }
+    if (!(snap.metadata && snap.metadata.fromCache) && !purgeStarted) { purgeStarted = true; setTimeout(purgeOldChatPhotos, 3000); }
     firstMsgs = false; msgsLoaded = true;
     renderChat(); render();
   }, () => { msgsLoaded = true; renderChat(); }));
@@ -682,7 +696,7 @@ $("bellBtn").addEventListener("click", async () => {
   $("bellPanel").hidden = !open;
   $("bellBtn").setAttribute("aria-expanded", String(open));
   $("bellBtn").textContent = open ? "닫기" : "알림 설정";
-  if (open) { await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (open) { drawBadgeState(); await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 $("copyTopic").addEventListener("click", async () => {
   const t = myP().ntfyTopic; if (!t) return;
@@ -702,6 +716,35 @@ async function sendNtfy(topic, title, message, tags, click) {
   });
   if (!res.ok) throw new Error("ntfy " + res.status);
 }
+// ---- 앱 아이콘 숫자 (홈 화면·독에 추가한 공책 앱) ----
+const badgeSupported = "setAppBadge" in navigator;
+let lastBadge = -1;
+function setIconBadge(n) {
+  if (!badgeSupported || n === lastBadge) return;
+  lastBadge = n;
+  try {
+    const p = n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+function drawBadgeState() {
+  const btn = $("badgeBtn"), st = $("badgeState");
+  if (!badgeSupported) {
+    btn.hidden = true;
+    st.textContent = "지금 연 화면에서는 아이콘 숫자를 쓸 수 없어요. 홈 화면(아이폰)이나 독(맥)에 추가한 공책 앱으로 열면 켤 수 있어요.";
+    return;
+  }
+  const perm = "Notification" in window ? Notification.permission : "granted";
+  if (perm === "granted") { btn.hidden = true; st.textContent = "켜져 있어요. 새 글·대화가 오면 아이콘에 숫자가 나와요."; }
+  else if (perm === "denied") { btn.hidden = true; st.textContent = "알림이 꺼져 있어요. 설정 → 알림에서 '우리 공책'을 허용해 주세요."; }
+  else { btn.hidden = false; st.textContent = "켜기를 누르고 '허용'을 고르면 아이콘에 숫자가 나와요."; }
+}
+$("badgeBtn").addEventListener("click", async () => {
+  try { if ("Notification" in window) await Notification.requestPermission(); } catch (e) {}
+  lastBadge = -1; drawBadgeState(); if (me) render();
+  toast(("Notification" in window && Notification.permission === "granted") ? "아이콘 숫자를 켰어요" : "허용하지 않아서 켜지 못했어요");
+});
+
 $("testPush").addEventListener("click", async () => {
   const t = await ensureTopic(); drawBell();
   try { await sendNtfy(t, "우리 둘의 공책", "시험 알림이에요. 이게 보이면 설정 끝!", "bell"); toast("보냈어요. 휴대폰을 확인해 보세요"); }
@@ -839,10 +882,14 @@ function renderChat(forceBottom) {
     const col = el("div", "msg-col");
     if (!mine && first) col.append(el("span", "msg-name", nameOf(m.author)));
     let bubble;
-    if (m.photoId) {
+    if (m.photoId && (photoExpired(m) || photoCache[m.photoId] === "")) {
+      bubble = el("div", "bubble expired", "기간이 지나 지워진 사진이에요");
+    } else if (m.photoId) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
+      const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
+      if (left <= 2) col.append(el("span", "msg-expire", left <= 1 ? "오늘 지워져요" : left + "일 뒤 지워져요"));
     } else {
       bubble = el("div", "bubble", m.text || "");
       if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
@@ -884,8 +931,37 @@ $("chatPhotoIn").addEventListener("change", async (e) => {
   if (files.length + chatPending.length > 6) toast("사진은 한 번에 6장까지 보낼 수 있어요");
   drawChatPending(); chatCanSend();
 });
+// ---- 대화 사진 7일 보관 ----
+let purgeStarted = false;
+const CHAT_PHOTO_DAYS = 7, DAY_MS = 86400000;
+const photoExpired = (m) => m.createdAt && Date.now() - tms(m.createdAt) > CHAT_PHOTO_DAYS * DAY_MS;
+// 공책을 열 때(하루 한 번) 내가 보낸 대화 사진 중 7일 지난 것을 지움. 공책 사진은 건드리지 않음
+async function purgeOldChatPhotos() {
+  if (!me) return;
+  const key = "nb-purge-" + me.uid;
+  try { if (Date.now() - (Number(localStorage.getItem(key)) || 0) < DAY_MS / 2) return; } catch (e) {}
+  let purged = 0;
+  // 1) 새로 보낸 대화 사진: 지울 날짜(expireAt)가 지난 것
+  try {
+    const snap = await getDocs(query(collection(db, "photos"), where("expireAt", "<", Date.now()), limit(30)));
+    for (const d of snap.docs) {
+      if (d.data().author !== me.uid) continue;          // 그분 사진은 그분 공책이 지움
+      try { await deleteDoc(d.ref); photoCache[d.id] = ""; purged++; } catch (e) {}
+    }
+  } catch (e) {}
+  // 2) 이 기능 전에 보낸 대화 사진: 대화 기록에서 7일 지난 내 사진
+  for (const m of msgs) {
+    if (m.author !== me.uid || !m.photoId || !photoExpired(m) || photoCache[m.photoId] === "") continue;
+    try { await deleteDoc(doc(db, "photos", m.photoId)); purged++; } catch (e) {}
+    photoCache[m.photoId] = "";
+  }
+  try { localStorage.setItem(key, String(Date.now())); } catch (e) {}
+  if (purged) renderChat();
+}
+
 function drawChatPending() {
   const box = $("chatPending"); box.replaceChildren(); box.hidden = !chatPending.length;
+  if (chatPending.length) box.append(el("p", "pending-note", "대화 사진은 7일이 지나면 지워져요. 오래 남길 사진은 공책에 올려 주세요."));
   chatPending.forEach((src, i) => {
     const d = el("div", "pic"); const img = el("img"); img.src = src; img.alt = "보낼 사진 " + (i + 1);
     const x = el("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", "이 사진 빼기");
@@ -902,7 +978,8 @@ $("chatForm").addEventListener("submit", async (e) => {
   chatIn.focus();
   try {
     for (const src of photos) {
-      const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: src, createdAt: serverTimestamp() });
+      // 대화 사진에는 지울 날짜(expireAt)를 붙여 둠 → 7일 뒤 정리
+      const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: src, kind: "chat", expireAt: Date.now() + CHAT_PHOTO_DAYS * DAY_MS, createdAt: serverTimestamp() });
       photoCache[ref.id] = src;
       await addDoc(collection(db, "messages"), { author: me.uid, photoId: ref.id, createdAt: serverTimestamp() });
     }
@@ -1076,6 +1153,7 @@ function render() {
   $("chatBadge").textContent = String(chatNew);
   $("chatBadge").hidden = chatNew === 0;
   if (!titleTimer) document.title = (total + chatNew ? "(" + (total + chatNew) + ") " : "") + "우리 둘의 공책";
+  setIconBadge(total + chatNew);
 
   const list = $("list");
   // 다시 그려도 쓰던 답글이 지워지지 않게 보관
