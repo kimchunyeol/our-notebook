@@ -298,7 +298,6 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
         <legend>이럴 때 알려 주세요</legend>
         <label><input type="checkbox" id="optMsg" checked> 대화 메시지가 왔을 때</label>
         <label><input type="checkbox" id="optNote" checked> 공책에 새 글이나 답글이 달렸을 때</label>
-        <label><input type="checkbox" id="optEnter" checked> 그분이 공책에 들어왔을 때</label>
         <label><input type="checkbox" id="optPreview"> 알림에 메시지 내용도 보여 주기</label>
       </fieldset>
       <div class="row">
@@ -464,7 +463,7 @@ function checkComings() {
     if (id === me.uid || !p.name) continue;
     const now = isHere(p), before = wasHere[id];
     if (presenceReady && before !== undefined && now !== before) {
-      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");   // 나갈 때는 알리지 않음
+      // 들어오거나 나갈 때 안내는 띄우지 않음 (위쪽 초록 점으로만 표시)
     }
     wasHere[id] = now;
   }
@@ -565,7 +564,12 @@ function startSession(u) {
     firstPeople = false;
     drawPresence();
     if (!$("bellPanel").hidden) drawBell();
-    maybePushEnter();
+    // 그분 휴대폰에 예전 공책이 남아 있어도 "들어왔어요" 알림을 보내지 않도록 내 설정에서 끔 (한 번만)
+    if (!enterOffDone && !(snap.metadata && snap.metadata.fromCache) && people[u.uid]) {
+      enterOffDone = true;
+      const n = people[u.uid].notify;
+      if (!n || n.enter !== false) setDoc(doc(db, "people", u.uid), { notify: { ...myPrefs(), enter: false } }, { merge: true }).catch(() => {});
+    }
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
     else {
       const firstShow = $("app").hidden;
@@ -676,7 +680,8 @@ function randomTopic() {
   return "gongchaek-" + [...a].map((n) => abc[n % abc.length]).join("");
 }
 const myP = () => (me && people[me.uid]) || {};
-const myPrefs = () => ({ msg: true, note: true, enter: true, preview: false, ...(myP().notify || {}) });
+const myPrefs = () => ({ msg: true, note: true, enter: false, preview: false, ...(myP().notify || {}) });
+let enterOffDone = false;
 
 async function ensureTopic() {
   if (!me) return "";
@@ -689,7 +694,7 @@ function drawBell() {
   if (!me) return;
   $("myTopic").textContent = myP().ntfyTopic || "만드는 중…";
   const p = myPrefs();
-  $("optMsg").checked = p.msg; $("optNote").checked = p.note; $("optEnter").checked = p.enter; $("optPreview").checked = p.preview;
+  $("optMsg").checked = p.msg; $("optNote").checked = p.note; $("optPreview").checked = p.preview;
   const oid = otherId();
   $("bellState").textContent = oid && people[oid].ntfyTopic ? "그분도 알림 설정을 마쳤어요" : "그분은 아직 알림 설정을 안 했어요";
 }
@@ -705,7 +710,7 @@ $("copyTopic").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(t); toast("복사했어요. ntfy에 붙여 넣으세요"); }
   catch (e) { const r = document.createRange(); r.selectNodeContents($("myTopic")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("글자를 길게 눌러 복사해 주세요"); }
 });
-for (const [id, key] of [["optMsg", "msg"], ["optNote", "note"], ["optEnter", "enter"], ["optPreview", "preview"]]) {
+for (const [id, key] of [["optMsg", "msg"], ["optNote", "note"], ["optPreview", "preview"]]) {
   $(id).addEventListener("change", () => {
     if (!me) return;
     setDoc(doc(db, "people", me.uid), { notify: { ...myPrefs(), [key]: $(id).checked } }, { merge: true }).catch(() => toast("저장하지 못했어요"));
@@ -761,7 +766,7 @@ function pushOther(kind, text) {
   const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
   if (kind === "msg" && !prefs.msg) return;
   if ((kind === "letter" || kind === "reply") && !prefs.note) return;
-  if (kind === "enter" && !prefs.enter) return;
+  if (kind === "enter") return;   // 들어왔다는 알림은 보내지 않음
   if (isHere(o)) return;   // 지금 보고 있으면 화면 안내로 충분
   const myName = nameOf(me.uid);
   const what = { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
@@ -778,7 +783,6 @@ function maybePushEnter() {
   if (enterChecked || !me || document.visibilityState !== "visible" || !otherId()) return;
   enterChecked = true;
   let last = 0; try { last = Number(localStorage.getItem(LAST_KEY)) || 0; } catch (e) {}
-  if (Date.now() - last > 10 * 60 * 1000) pushOther("enter");
   try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {}
 }
 function stampLastOpen() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} }
