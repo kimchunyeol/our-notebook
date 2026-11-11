@@ -174,6 +174,34 @@ body.chat-open { overflow: hidden; }
 a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .msg.me .bubble a.link { color: inherit; }
 .msg-expire { font-size: 0.7rem; color: var(--ink-soft); padding: 0 4px; }
+
+/* 반응 */
+.bubble { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.chat-log .pic img { -webkit-touch-callout: none; }
+.reacts { display: flex; flex-wrap: wrap; gap: 4px; }
+.msg-col .reacts { margin-top: -2px; }
+.react-chip {
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px; font-size: 0.85rem; line-height: 1.5; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.react-chip.mine { border-color: var(--pen); background: var(--pen-soft); }
+.letter-reacts { align-items: center; }
+.react-add { background: transparent; border: 1px dashed var(--line); color: var(--ink-soft); padding: 2px 10px; font-size: 0.8rem; }
+.react-add:hover { color: var(--ink); }
+.sum-reacts { letter-spacing: 1px; }
+.react-picker {
+  position: fixed; z-index: 35; display: flex; align-items: center; gap: 2px;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px;
+  box-shadow: 0 6px 24px rgba(15, 20, 40, .18);
+}
+.rp-btn { background: transparent; border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 1.35rem; line-height: 40px; }
+.rp-btn:hover, .rp-btn:focus-visible { background: var(--pen-soft); }
+.rp-btn.on { background: var(--pen-soft); box-shadow: inset 0 0 0 2px var(--pen); }
+.rp-copy { background: transparent; color: var(--ink-soft); border-left: 1px solid var(--line); border-radius: 0 999px 999px 0; padding: 8px 12px; font-size: 0.85rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .react-picker:not([hidden]) { animation: pop .14s ease-out; }
+  @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+}
 .pending-note { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--ink-soft); }
 .bubble.photo .pic { width: min(220px, 60vw); aspect-ratio: auto; min-height: 80px; }
 .bubble.photo .pic img { height: auto; max-height: 300px; object-fit: cover; }
@@ -365,6 +393,7 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
   </div>
 </div>
 <div class="viewer" id="viewer" hidden><img id="viewerImg" alt="크게 본 사진"><button type="button" id="viewerClose">닫기</button></div>
+<div class="react-picker" id="reactPicker" role="dialog" aria-label="반응 고르기" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
 <script type="module">
@@ -602,6 +631,23 @@ function startSession(u) {
 
   // 대화 메시지 (최근 300개)
   firstMsgs = true; msgs = [];
+  // 반응
+  let firstReacts = true; reactions = {};
+  unsubs.push(onSnapshot(query(collection(db, "reactions"), limit(3000)), (snap) => {
+    reactions = {};
+    snap.forEach((d) => { const r = d.data(); (reactions[r.target] ||= []).push(r); });
+    if (!firstReacts) {
+      for (const c of snap.docChanges()) {
+        const r = c.doc.data();
+        if ((c.type === "added" || c.type === "modified") && r.author !== u.uid && !c.doc.metadata.hasPendingWrites) {
+          toast(nameOf(r.author) + "님이 " + r.emoji + " 반응을 남겼어요", 3500);
+        }
+      }
+    }
+    firstReacts = false;
+    renderChat(); render();
+  }, () => {}));
+
   unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(300)), (snap) => {
     msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse();
     if (!firstMsgs) {
@@ -760,23 +806,114 @@ $("testPush").addEventListener("click", async () => {
 });
 
 // 상대에게 알림 보내기 — 상대가 지금 공책을 보고 있으면 보내지 않음
-function pushOther(kind, text) {
+// where: 반응 알림일 때 "chat"(대화) 또는 "note"(공책)
+function pushOther(kind, text, where) {
   const oid = otherId(); if (!oid) return;
   const o = people[oid];
   if (!o.ntfyTopic) return;
   const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
   if (kind === "msg" && !prefs.msg) return;
   if ((kind === "letter" || kind === "reply") && !prefs.note) return;
+  if (kind === "react" && !(where === "chat" ? prefs.msg : prefs.note)) return;
   // 들어왔다는 알림: 받는 사람이 끄지 않았을 때만
   if (kind === "enter" && prefs.enterV2 === false) return;
   if (isHere(o)) return;   // 지금 보고 있으면 화면 안내로 충분
   const myName = nameOf(me.uid);
-  const what = { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
-  const body = prefs.preview && text && kind !== "enter" ? String(text).slice(0, 120) : myName + "님이 " + what;
-  const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave" }[kind];
+  const what = kind === "react"
+    ? (where === "chat" ? "메시지에 " : "공책 글에 ") + text + " 반응을 남겼어요"
+    : { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
+  const showText = prefs.preview && text && kind !== "enter" && kind !== "react";
+  const body = showText ? String(text).slice(0, 120) : myName + "님이 " + what;
+  const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave", react: "heart" }[kind];
   // 알림을 누르면 메시지는 대화 화면, 글·답글은 공책 화면으로 바로 열림
-  const click = SITE + (kind === "msg" ? "#chat" : "#note");
-  sendNtfy(o.ntfyTopic, prefs.preview && kind !== "enter" ? myName + "님이 " + what : "우리 둘의 공책", body, tag, click).catch(() => {});
+  const click = SITE + ((kind === "msg" || where === "chat") ? "#chat" : "#note");
+  sendNtfy(o.ntfyTopic, showText ? myName + "님이 " + what : "우리 둘의 공책", body, tag, click).catch(() => {});
+}
+
+// ================= 반응 (❤️ 😂 👍 …) =================
+// reactions 문서 하나 = 한 사람이 한 글/메시지에 남긴 반응 하나. 문서 이름: 대상id_사람uid
+const EMOJIS = ["❤️", "😂", "👍", "😢", "😮", "🙏"];
+let reactions = {};          // 대상 id → [{author, emoji}]
+const reactsOn = (target) => reactions[target] || [];
+const myReactOn = (target) => { const r = reactsOn(target).find((x) => x.author === me.uid); return r ? r.emoji : null; };
+async function react(target, where, emoji) {
+  if (!me) return;
+  const ref = doc(db, "reactions", target + "_" + me.uid);
+  try {
+    if (myReactOn(target) === emoji) await deleteDoc(ref);   // 같은 걸 다시 누르면 취소
+    else {
+      await setDoc(ref, { target, where, author: me.uid, emoji, createdAt: serverTimestamp() });
+      pushOther("react", emoji, where);
+    }
+  } catch (e) {
+    toast(e && e.code === "permission-denied"
+      ? "반응을 남길 수 없어요. Firebase 규칙을 새것으로 바꿨는지 확인해 주세요."
+      : "반응을 남기지 못했어요. 인터넷 연결을 확인해 주세요.", 4000);
+  }
+}
+// 반응 고르는 작은 창
+function openPicker(anchor, target, where, copyText) {
+  const p = $("reactPicker");
+  p.replaceChildren();
+  const mine = myReactOn(target);
+  for (const e of EMOJIS) {
+    const b = el("button", "rp-btn" + (mine === e ? " on" : ""), e); b.type = "button";
+    b.setAttribute("aria-label", e + " 반응" + (mine === e ? " 취소" : ""));
+    b.onclick = (ev) => { ev.stopPropagation(); closePicker(); react(target, where, e); };
+    p.append(b);
+  }
+  if (copyText) {
+    const c = el("button", "rp-copy", "복사"); c.type = "button";
+    c.onclick = async (ev) => {
+      ev.stopPropagation(); closePicker();
+      try { await navigator.clipboard.writeText(copyText); toast("복사했어요"); } catch (e) { toast("복사하지 못했어요"); }
+    };
+    p.append(c);
+  }
+  p.hidden = false;
+  const r = anchor.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight;
+  let top = r.top - ph - 8; if (top < 8) top = r.bottom + 8;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - pw / 2), window.innerWidth - pw - 8);
+  p.style.top = top + "px"; p.style.left = left + "px";
+}
+function closePicker() { $("reactPicker").hidden = true; }
+document.addEventListener("pointerdown", (e) => { if (!$("reactPicker").hidden && !$("reactPicker").contains(e.target)) closePicker(); }, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
+$("chatLog").addEventListener("scroll", closePicker, { passive: true });
+window.addEventListener("scroll", closePicker, { passive: true });
+// 길게 누르기 (휴대폰) / 오른쪽 클릭 (컴퓨터)
+function onLongPress(node, fn) {
+  let t = null, sx = 0, sy = 0, fired = false;
+  const cancel = () => clearTimeout(t);
+  node.addEventListener("pointerdown", (e) => {
+    fired = false; sx = e.clientX; sy = e.clientY;
+    t = setTimeout(() => { fired = true; fn(); }, 450);
+  });
+  node.addEventListener("pointermove", (e) => { if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) cancel(); });
+  node.addEventListener("pointerup", cancel);
+  node.addEventListener("pointerleave", cancel);
+  node.addEventListener("pointercancel", cancel);
+  // 길게 누른 뒤 손을 떼면 생기는 클릭은 무시 (사진이 열리거나 메뉴가 바뀌지 않게)
+  node.addEventListener("click", (e) => { if (fired) { e.preventDefault(); e.stopImmediatePropagation(); fired = false; } }, true);
+  node.addEventListener("contextmenu", (e) => { e.preventDefault(); cancel(); fn(); });
+}
+// 남긴 반응 보여 주기 (같은 이모지는 묶어서 숫자로)
+function reactRow(target, where) {
+  const list = reactsOn(target);
+  const row = el("div", "reacts");
+  if (!list.length) return row;
+  const groups = {};
+  for (const r of list) (groups[r.emoji] ||= []).push(r.author);
+  for (const [emoji, who] of Object.entries(groups)) {
+    const mine = who.includes(me.uid);
+    const chip = el("button", "react-chip" + (mine ? " mine" : ""), who.length > 1 ? emoji + " " + who.length : emoji);
+    chip.type = "button";
+    chip.title = who.map(nameOf).join(", ");
+    chip.setAttribute("aria-label", who.map(nameOf).join(", ") + " " + emoji + (mine ? " (누르면 취소)" : " (누르면 나도 남기기)"));
+    chip.onclick = (e) => { e.stopPropagation(); react(target, where, emoji); };
+    row.append(chip);
+  }
+  return row;
 }
 // 내가 공책에 들어오면 (10분 넘게 비웠다가) 그분께 알림. 마지막으로 본 시각은 이 기기에 기록
 let enterChecked = false;
@@ -898,13 +1035,19 @@ function renderChat(forceBottom) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
-      const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
-      if (left <= 2) col.append(el("span", "msg-expire", left <= 1 ? "오늘 지워져요" : left + "일 뒤 지워져요"));
     } else {
       bubble = elLinked("div", "bubble", m.text || "");
       if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
     }
     col.append(bubble);
+    // 길게 누르면 반응 고르기 (글 메시지는 복사도)
+    const anchor = bubble;
+    onLongPress(bubble, () => openPicker(anchor, m.id, "chat", m.photoId ? null : (m.text || "")));
+    const rr = reactRow(m.id, "chat"); if (rr.childNodes.length) col.append(rr);
+    if (m.photoId && !bubble.classList.contains("expired")) {
+      const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
+      if (left <= 2) col.append(el("span", "msg-expire", left <= 1 ? "오늘 지워져요" : left + "일 뒤 지워져요"));
+    }
     const side = el("div", "msg-side");
     if (mine && !(theirRead && t <= theirRead)) side.append(el("span", "one", "1"));
     if (last) side.append(el("span", null, fmtTime(t)));
@@ -1231,6 +1374,8 @@ function render() {
     const info = el("span", "sum-info");
     if (pids.length) info.append(el("span", null, "사진 " + pids.length));
     if (myReplies.length) info.append(el("span", null, "답글 " + myReplies.length));
+    const lr = reactsOn(l.id);
+    if (lr.length) info.append(el("span", "sum-reacts", lr.map((r) => r.emoji).join("")));
     const chev = el("span", "chev"); chev.setAttribute("aria-hidden", "true");
     sum.append(top, ttl, info, chev);
     sum.onclick = () => {
@@ -1255,6 +1400,13 @@ function render() {
       }
       card.append(grid);
     }
+    // 반응: 남긴 반응들 + 반응 남기기 버튼
+    const reactBar = reactRow(l.id, "note");
+    reactBar.classList.add("letter-reacts");
+    const addR = el("button", "react-add", myReactOn(l.id) ? "반응 바꾸기" : "반응 남기기"); addR.type = "button";
+    addR.onclick = (e) => { e.stopPropagation(); openPicker(addR, l.id, "note", null); };
+    reactBar.append(addR);
+    card.append(reactBar);
 
     const box = el("div", "replies");
     for (const r of myReplies) {
