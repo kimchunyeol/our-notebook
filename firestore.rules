@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 공책에 들어올 수 있는 두 사람
+    function isUs() {
+      return request.auth != null
+        && request.auth.uid in ['qmVx6n6HHBWKuoKDXThYYf1EFYp1', 'oltwfB3UHyXE6uyXOqwfbOADHzg1'];
+    }
+
+    // 사람 정보(이름, 접속, 알림 설정): 둘 다 보고, 자기 것만 고침
+    match /people/{uid} {
+      allow read: if isUs();
+      allow write: if isUs() && request.auth.uid == uid;
+    }
+
+    // 같이 쓰는 설정: 둘 다 보고 둘 다 고침
+    match /settings/{id} {
+      allow read, write: if isUs();
+    }
+
+    // 나머지 모든 칸 (글, 사진, 대화, 반응, 답글, 앞으로 생길 칸까지):
+    // 둘 다 보고, 각자 자기가 쓴 것만 쓰고·고치고·지움
+    match /{col}/{id} {
+      allow read: if isUs() && col != 'people' && col != 'settings';
+      allow create: if isUs() && col != 'people' && col != 'settings'
+                    && request.resource.data.author == request.auth.uid;
+      allow update: if isUs() && col != 'people' && col != 'settings'
+                    && resource.data.author == request.auth.uid
+                    && request.resource.data.author == request.auth.uid;
+      allow delete: if isUs() && col != 'people' && col != 'settings'
+                    && resource.data.author == request.auth.uid;
+    }
+  }
+}
