@@ -396,8 +396,6 @@ const auth = initializeAuth(fb, { persistence: [indexedDBLocalPersistence, brows
 const db = getFirestore(fb);
 // 공책에 들어올 수 있는 두 사람 (보안 규칙과 같은 값)
 const ALLOWED = ["qmVx6n6HHBWKuoKDXThYYf1EFYp1", "oltwfB3UHyXE6uyXOqwfbOADHzg1"];
-// "들어왔어요" 안내는 소열님이 들어올 때만 그분께 보냄 (그분이 들어올 때는 보내지 않음)
-const SOYEOL = ALLOWED[0];
 
 const MAX_PHOTOS = 4;
 let me = null, people = {}, letters = [], replies = [], filter = "all";
@@ -466,8 +464,8 @@ function checkComings() {
     if (id === me.uid || !p.name) continue;
     const now = isHere(p), before = wasHere[id];
     if (presenceReady && before !== undefined && now !== before) {
-      // 소열님이 들어올 때만 그분 화면에 안내. 나갈 때와 그분이 들어올 때는 안내 없음
-      if (now && id === SOYEOL) alertPerson(p.name + "님이 공책에 들어왔어요");
+      // 상대가 들어오면 안내 (나갈 때는 안내 없음)
+      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");
     }
     wasHere[id] = now;
   }
@@ -568,12 +566,6 @@ function startSession(u) {
     firstPeople = false;
     drawPresence();
     if (!$("bellPanel").hidden) drawBell();
-    // 그분 휴대폰에 예전 공책이 남아 있어도 "들어왔어요" 알림을 보내지 않도록 내 설정에서 끔 (한 번만)
-    if (u.uid === SOYEOL && !enterOffDone && !(snap.metadata && snap.metadata.fromCache) && people[u.uid]) {
-      enterOffDone = true;
-      const n = people[u.uid].notify;
-      if (!n || n.enter !== false) setDoc(doc(db, "people", u.uid), { notify: { ...myPrefs(), enter: false } }, { merge: true }).catch(() => {});
-    }
     if (!(snap.metadata && snap.metadata.fromCache)) maybePushEnter();
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
     else {
@@ -686,7 +678,6 @@ function randomTopic() {
 }
 const myP = () => (me && people[me.uid]) || {};
 const myPrefs = () => ({ msg: true, note: true, enter: false, preview: false, ...(myP().notify || {}) });
-let enterOffDone = false;
 
 async function ensureTopic() {
   if (!me) return "";
@@ -700,9 +691,10 @@ function drawBell() {
   $("myTopic").textContent = myP().ntfyTopic || "만드는 중…";
   const p = myPrefs();
   $("optMsg").checked = p.msg; $("optNote").checked = p.note; $("optPreview").checked = p.preview;
-  // "소열님이 들어왔을 때" 알림 칸은 그분 화면에만 보임
-  $("optEnterRow").hidden = me.uid === SOYEOL;
-  $("optEnterText").textContent = nameOf(SOYEOL) + "님이 공책에 들어왔을 때";
+  // "상대가 들어왔을 때" 알림 칸 (두 분 모두)
+  const other = otherId();
+  $("optEnterRow").hidden = false;
+  $("optEnterText").textContent = (other ? nameOf(other) + "님이" : "상대가") + " 공책에 들어왔을 때";
   $("optEnter").checked = p.enterV2 !== false;
   const oid = otherId();
   $("bellState").textContent = oid && people[oid].ntfyTopic ? "그분도 알림 설정을 마쳤어요" : "그분은 아직 알림 설정을 안 했어요";
@@ -775,8 +767,8 @@ function pushOther(kind, text) {
   const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
   if (kind === "msg" && !prefs.msg) return;
   if ((kind === "letter" || kind === "reply") && !prefs.note) return;
-  // 들어왔다는 알림: 소열님이 들어올 때만, 그분이 끄지 않았을 때만
-  if (kind === "enter" && (me.uid !== SOYEOL || prefs.enterV2 === false)) return;
+  // 들어왔다는 알림: 받는 사람이 끄지 않았을 때만
+  if (kind === "enter" && prefs.enterV2 === false) return;
   if (isHere(o)) return;   // 지금 보고 있으면 화면 안내로 충분
   const myName = nameOf(me.uid);
   const what = { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
@@ -793,8 +785,8 @@ function maybePushEnter() {
   if (enterChecked || !me || document.visibilityState !== "visible" || !otherId()) return;
   enterChecked = true;
   let last = 0; try { last = Number(localStorage.getItem(LAST_KEY)) || 0; } catch (e) {}
-  // 10분 넘게 비웠다가 들어오면 그분 휴대폰에 알림 (소열님 공책에서만 보냄)
-  if (me.uid === SOYEOL && Date.now() - last > 10 * 60 * 1000) pushOther("enter");
+  // 10분 넘게 비웠다가 들어오면 상대 휴대폰에 알림
+  if (Date.now() - last > 10 * 60 * 1000) pushOther("enter");
   try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {}
 }
 function stampLastOpen() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} }
