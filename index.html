@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#F2F4F8">
 <title>우리 둘의 공책</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=VT323&display=swap">
 <style>
 :root {
   --paper: #F2F4F8; --sheet: #FFFFFF; --ink: #1E2640; --ink-soft: #5C6684;
@@ -223,6 +223,41 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
 }
 .chat-bar .primary { padding: 9px 16px; }
 .chat-photo { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer; }
+button.chat-photo { background: transparent; padding: 0; }
+.chat-beep[aria-expanded="true"] { color: var(--pen); border-color: var(--pen); background: var(--pen-soft); }
+
+/* 삐삐 — 옛날 액정 화면 느낌 */
+:root { --lcd-bg: #B9C9A2; --lcd-ink: #22301A; --lcd-dim: #5C6F4A; }
+.pager-sheet {
+  flex: none; border-top: 1px solid var(--line); background: var(--sheet);
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) 4px max(12px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 10px; max-height: 60%; overflow-y: auto;
+}
+.pager { background: #2B2F36; border-radius: 14px; padding: 10px; }
+.pager-lcd {
+  background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 6px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 10px; min-height: 52px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.25);
+}
+.pager-lcd output { font-family: "VT323", ui-monospace, Menlo, monospace; font-size: 2.4rem; line-height: 1; letter-spacing: 0.12em; overflow-wrap: anywhere; min-width: 0; }
+.pager-tag { font-family: "VT323", ui-monospace, monospace; font-size: 0.95rem; color: var(--lcd-dim); border: 1px solid var(--lcd-dim); border-radius: 3px; padding: 0 4px; flex: none; }
+.pager-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.pager-mean { margin: 0 auto 0 2px; font-size: 0.8rem; color: #C9CED8; min-width: 0; }
+.pager-close { background: transparent; color: #C9CED8; border: 1px solid #4A505B; padding: 6px 12px; font-size: 0.85rem; }
+.pager-row .primary { padding: 7px 16px; }
+.pager-row .primary:disabled { opacity: .4; }
+.pager-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pager-preset { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 0; color: var(--ink); }
+.pager-preset b { font-family: "VT323", ui-monospace, monospace; font-size: 1.3rem; font-weight: 400; letter-spacing: 0.06em; line-height: 1.1; }
+.pager-preset span { font-size: 0.7rem; color: var(--ink-soft); }
+.pager-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pager-key { background: var(--paper); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 5px 0; font-family: "VT323", ui-monospace, monospace; font-size: 1.5rem; font-weight: 400; line-height: 1.2; }
+.pager-key:active, .pager-preset:active { background: var(--pen-soft); }
+.pager-del { grid-column: 1 / -1; font-family: var(--f-ui); font-size: 0.85rem; padding: 6px 0; color: var(--ink-soft); }
+.bubble.beep, .msg.me .bubble.beep { background: #2B2F36; border: 0; padding: 6px; color: #E7EAF4; display: flex; flex-direction: column; gap: 4px; }
+.beep-lcd { background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 5px; padding: 4px 10px; display: flex; align-items: center; gap: 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,.25); }
+.beep-code { font-family: "VT323", ui-monospace, Menlo, monospace; font-size: 1.9rem; line-height: 1; letter-spacing: 0.12em; overflow-wrap: anywhere; }
+.beep-mean { font-size: 0.78rem; color: #C9CED8; padding: 0 4px 2px; }
 .chat-photo:focus-within { outline: 2px solid var(--pen); outline-offset: 2px; }
 .chat-photo svg { width: 18px; height: 18px; }
 .chat-photo input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -348,11 +383,27 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
       </div>
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
       <div class="pics chat-pending" id="chatPending" hidden></div>
+      <!-- 삐삐 보내기 -->
+      <div class="pager-sheet" id="pagerSheet" hidden>
+        <div class="pager">
+          <div class="pager-lcd" aria-live="polite"><span class="pager-tag">BEEP</span><output id="pagerOut">_</output></div>
+          <div class="pager-row">
+            <p class="pager-mean" id="pagerMean">숫자를 눌러 신호를 만들어 보세요</p>
+            <button type="button" class="pager-close" id="pagerClose">닫기</button>
+            <button type="button" class="primary" id="pagerSend" disabled>보내기</button>
+          </div>
+        </div>
+        <div class="pager-presets" id="pagerPresets"></div>
+        <div class="pager-keys" id="pagerKeys"></div>
+      </div>
       <form class="chat-bar" id="chatForm">
         <label class="chat-photo" aria-label="사진 보내기">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg>
           <input type="file" id="chatPhotoIn" accept="image/*" multiple>
         </label>
+        <button type="button" class="chat-photo chat-beep" id="beepBtn" aria-label="삐삐 보내기" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="7" y="7" width="10" height="5" rx="1"/><path d="M8 16h2M14 16h2"/></svg>
+        </button>
         <textarea id="chatIn" rows="1" maxlength="1000" placeholder="메시지를 입력하세요" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
         <button type="submit" class="primary" id="chatSend" disabled>보내기</button>
       </form>
@@ -655,7 +706,12 @@ function startSession(u) {
         const m = c.doc.data();
         if (c.type === "added" && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
             && (view !== "chat" || document.visibilityState !== "visible")) {
-          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : (m.text || "").slice(0, 40)));
+          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
+        }
+        // 삐삐는 대화 화면을 보고 있어도 소리로 알려 줌
+        if (c.type === "added" && m.beep && m.author !== u.uid && !c.doc.metadata.hasPendingWrites) {
+          beepSound();
+          if (view === "chat" && document.visibilityState === "visible") toast("📟 " + nameOf(m.author) + "님 삐삐: " + m.beep, 4000);
         }
       }
     }
@@ -812,7 +868,7 @@ function pushOther(kind, text, where) {
   const o = people[oid];
   if (!o.ntfyTopic) return;
   const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
-  if (kind === "msg" && !prefs.msg) return;
+  if ((kind === "msg" || kind === "beep") && !prefs.msg) return;
   if ((kind === "letter" || kind === "reply") && !prefs.note) return;
   if (kind === "react" && !(where === "chat" ? prefs.msg : prefs.note)) return;
   // 들어왔다는 알림: 받는 사람이 끄지 않았을 때만
@@ -821,14 +877,96 @@ function pushOther(kind, text, where) {
   const myName = nameOf(me.uid);
   const what = kind === "react"
     ? (where === "chat" ? "메시지에 " : "공책 글에 ") + text + " 반응을 남겼어요"
+    : kind === "beep"
+    ? "삐삐를 보냈어요: " + text + (BEEP_MEANS[text] ? " (" + BEEP_MEANS[text] + ")" : "")
     : { msg: "메시지를 보냈어요", letter: "공책에 새 글을 남겼어요", reply: "답글을 달았어요", enter: "공책에 들어왔어요" }[kind];
   const showText = prefs.preview && text && kind !== "enter" && kind !== "react";
   const body = showText ? String(text).slice(0, 120) : myName + "님이 " + what;
-  const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave", react: "heart" }[kind];
+  const tag = { msg: "speech_balloon", letter: "notebook", reply: "speech_balloon", enter: "wave", react: "heart", beep: "pager" }[kind];
   // 알림을 누르면 메시지는 대화 화면, 글·답글은 공책 화면으로 바로 열림
-  const click = SITE + ((kind === "msg" || where === "chat") ? "#chat" : "#note");
+  const click = SITE + ((kind === "msg" || kind === "beep" || where === "chat") ? "#chat" : "#note");
   sendNtfy(o.ntfyTopic, showText ? myName + "님이 " + what : "우리 둘의 공책", body, tag, click).catch(() => {});
 }
+
+// ================= 삐삐 =================
+// 옛날 삐삐 숫자 암호 (뜻이 있는 것만 말풍선 아래에 풀이)
+const BEEP_MEANS = {
+  "1004": "천사, 사랑해",
+  "486": "사랑해",
+  "0024": "영원히 사랑해",
+  "8282": "빨리빨리",
+  "1010235": "열렬히 사모",
+  "7942": "친구사이",
+  "112": "급해, 연락 줘",
+  "045": "빵 사 와",
+};
+const BEEP_PRESETS = ["1004", "486", "0024", "8282", "1010235", "112"];
+let pagerCode = "";
+function drawPager() {
+  $("pagerOut").textContent = pagerCode || "_";
+  $("pagerMean").textContent = pagerCode ? (BEEP_MEANS[pagerCode] || "직접 만든 신호") : "숫자를 눌러 신호를 만들어 보세요";
+  $("pagerSend").disabled = !pagerCode;
+}
+(function buildPager() {
+  const pre = $("pagerPresets");
+  for (const c of BEEP_PRESETS) {
+    const b = el("button", "pager-preset"); b.type = "button";
+    b.append(el("b", null, c), el("span", null, BEEP_MEANS[c]));
+    b.onclick = () => { pagerCode = c; drawPager(); };
+    pre.append(b);
+  }
+  const keys = $("pagerKeys");
+  for (const k of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]) {
+    const b = el("button", "pager-key", k); b.type = "button";
+    b.onclick = () => { if (pagerCode.length < 16) { pagerCode += k; drawPager(); tick(); } };
+    keys.append(b);
+  }
+  const del = el("button", "pager-key pager-del", "지우기"); del.type = "button";
+  del.onclick = () => { pagerCode = pagerCode.slice(0, -1); drawPager(); };
+  keys.append(del);
+})();
+function openPager(open) {
+  $("pagerSheet").hidden = !open;
+  $("beepBtn").setAttribute("aria-expanded", String(open));
+  if (open) { pagerCode = ""; drawPager(); const log = $("chatLog"); setTimeout(() => (log.scrollTop = log.scrollHeight), 0); }
+}
+$("beepBtn").addEventListener("click", () => openPager($("pagerSheet").hidden));
+$("pagerClose").addEventListener("click", () => openPager(false));
+$("pagerSend").addEventListener("click", async () => {
+  if (!me || !pagerCode) return;
+  const code = pagerCode;
+  openPager(false);
+  try {
+    await addDoc(collection(db, "messages"), { author: me.uid, beep: code, createdAt: serverTimestamp() });
+    renderChat(true);
+    pushOther("beep", code);
+    toast("📟 삐삐를 보냈어요");
+  } catch (e) { toast("삐삐를 보내지 못했어요. 인터넷 연결을 확인해 주세요."); }
+});
+// 삐삐 소리 (공책이 열려 있을 때만 울려요. 화면을 한 번이라도 누른 뒤부터 소리가 나요)
+let audioCtx = null;
+function getAudio() {
+  try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {}
+  return audioCtx;
+}
+document.addEventListener("pointerdown", () => getAudio(), { once: true });
+function tone(ctx, at, freq, dur, vol) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(vol, at + 0.01);
+  g.gain.setValueAtTime(vol, at + dur - 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g).connect(ctx.destination);
+  o.start(at); o.stop(at + dur + 0.02);
+}
+function beepSound() {
+  const ctx = getAudio(); if (!ctx || ctx.state !== "running") return;
+  const t = ctx.currentTime + 0.02;
+  for (let i = 0; i < 3; i++) { tone(ctx, t + i * 0.22, 2400, 0.12, 0.06); }   // 삐-삐-삐
+  try { if (navigator.vibrate) navigator.vibrate([120, 80, 120, 80, 120]); } catch (e) {}
+}
+function tick() { const ctx = getAudio(); if (ctx && ctx.state === "running") tone(ctx, ctx.currentTime + 0.01, 1800, 0.04, 0.03); }
 
 // ================= 반응 (❤️ 😂 👍 …) =================
 // reactions 문서 하나 = 한 사람이 한 글/메시지에 남긴 반응 하나. 문서 이름: 대상id_사람uid
@@ -1035,6 +1173,15 @@ function renderChat(forceBottom) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
+    } else if (m.beep) {
+      // 삐삐: 옛날 액정 화면처럼
+      bubble = el("div", "bubble beep");
+      const lcd = el("div", "beep-lcd");
+      lcd.append(el("span", "pager-tag", "BEEP"), el("span", "beep-code", m.beep));
+      bubble.append(lcd);
+      const mean = BEEP_MEANS[m.beep];
+      if (mean) bubble.append(el("span", "beep-mean", mean));
+      if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
     } else {
       bubble = elLinked("div", "bubble", m.text || "");
       if (mine) { bubble.style.cursor = "pointer"; bubble.onclick = () => { pickedMsg = pickedMsg === m.id ? null : m.id; renderChat(); }; }
