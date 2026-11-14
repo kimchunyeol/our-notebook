@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="우리 공책">
 <meta name="theme-color" content="#F2F4F8">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>우리 둘의 공책</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=VT323&display=swap">
@@ -441,11 +443,12 @@ button.chat-photo { background: transparent; padding: 0; }
       </ol>
       <div class="badge-row" id="badgeRow">
         <div>
-          <b>앱 아이콘에 숫자 표시</b>
-          <p class="bell-p" id="badgeState">홈 화면이나 독에 추가한 공책 앱 아이콘에 새 글·대화 수를 보여 줘요.</p>
+          <b>이 기기로 바로 알림 받기</b>
+          <p class="bell-p" id="badgeState">공책이 닫혀 있어도 "우리 공책" 이름으로 알림이 오고, 앱 아이콘에 숫자가 쌓여요.</p>
         </div>
         <button type="button" class="ghost" id="badgeBtn">켜기</button>
       </div>
+      <p class="bell-p" id="ntfyNote">위 알림을 켤 수 없는 기기(사파리로 여는 경우 등)는 아래 ntfy 앱으로 알림을 받으세요.</p>
       <fieldset class="bell-opts">
         <legend>이럴 때 알려 주세요</legend>
         <label><input type="checkbox" id="optMsg" checked> 대화 메시지가 왔을 때</label>
@@ -773,8 +776,8 @@ function startSession(u) {
     // "처음 들어왔어요" 안내는 없앰 — 들어올 때 안내는 drawPresence에서만
     firstPeople = false;
     drawPresence();
-    if (!$("bellPanel").hidden) drawBell();
-    if (!(snap.metadata && snap.metadata.fromCache)) maybePushEnter();
+    if (!$("bellPanel").hidden) { drawBell(); drawBadgeState(); }
+    if (!(snap.metadata && snap.metadata.fromCache)) { maybePushEnter(); refreshPushOnce(); }
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
     else {
       const firstShow = $("app").hidden;
@@ -977,33 +980,98 @@ async function sendNtfy(topic, title, message, tags, click) {
   });
   if (!res.ok) throw new Error("ntfy " + res.status);
 }
-// ---- 앱 아이콘 숫자 (홈 화면·독에 추가한 공책 앱) ----
+// ---- 앱 아이콘 숫자 + 웹 푸시 (홈 화면·독에 추가한 공책 앱) ----
+// 알림 중계 서버(Cloudflare) 주소. 비어 있으면 웹 푸시는 꺼져 있고 ntfy만 씀
+const PUSH_URL = "";
+const VAPID_PUBLIC = "BKosJjO_z7JQ33DV70NS1Iky1EKtT8qNb7fmOnzjOsFeWOCfKeSisp5bngVrM5LvTzgFmCauzQ2hDLMjc4YpDso";
 const badgeSupported = "setAppBadge" in navigator;
-let lastBadge = -1;
+const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+let lastBadge = -1, swReg = null;
+// 서비스 워커(알림 받는 일꾼)와 숫자를 함께 쓰는 작은 저장소
+function badgeDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("nb-badge", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function storeBadge(n) {
+  badgeDB().then((db) => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(n, "count"); }).catch(() => {});
+}
 function setIconBadge(n) {
-  if (!badgeSupported || n === lastBadge) return;
+  if (n === lastBadge) return;
   lastBadge = n;
+  storeBadge(n);
+  if (!badgeSupported) return;
   try {
     const p = n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge();
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 }
+// 다시 화면에 오면 숫자를 정확한 값으로 다시 맞춤 (닫혀 있는 동안 알림으로 올라간 숫자 정리)
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { lastBadge = -1; if (me) render(); } });
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").then((r) => { swReg = r; }).catch(() => {});
+  // 알림을 눌러 이미 열려 있던 공책으로 돌아오면 그 화면으로
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const h = e.data && e.data.type === "open" && e.data.hash ? e.data.hash.slice(1) : "";
+    if (["chat", "note", "together"].includes(h) && me) setView(h);
+  });
+}
+function b64uBytes(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+  const bin = atob(s); const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function subId(endpoint) { let h = 0; for (let i = 0; i < endpoint.length; i++) h = (h * 31 + endpoint.charCodeAt(i)) >>> 0; return "s" + h.toString(36); }
+// 이 기기를 알림 받는 기기로 등록 (사람 정보에 저장 → 상대 공책이 여기로 알림을 보냄)
+async function enablePush(fromButton) {
+  if (!pushSupported || !PUSH_URL || !me) return false;
+  if (fromButton) { if ((await Notification.requestPermission()) !== "granted") return false; }
+  else if (Notification.permission !== "granted") return false;
+  const reg = swReg || await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(VAPID_PUBLIC) });
+  const j = sub.toJSON(), id = subId(j.endpoint);
+  const cur = (myP().pushSubs || {})[id];
+  if (fromButton || !cur || cur.endpoint !== j.endpoint || Date.now() - (cur.at || 0) > 86400000) {
+    await setDoc(doc(db, "people", me.uid), { pushSubs: { [id]: { endpoint: j.endpoint, keys: j.keys, at: Date.now() } } }, { merge: true });
+  }
+  return true;
+}
+let pushChecked = false;
+function refreshPushOnce() { if (pushChecked || !me) return; pushChecked = true; enablePush(false).catch(() => {}); }
+// 상대의 알림 받는 기기 (60일 넘게 안 연 기기는 뺌)
+const pushSubsOf = (p) => Object.values((p && p.pushSubs) || {}).filter((s) => s && s.endpoint && Date.now() - (s.at || 0) < 60 * 86400000);
+async function sendWebPush(subs, payload) {
+  const res = await fetch(PUSH_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subs, payload }) });
+  if (!res.ok) throw new Error("push " + res.status);
+  const j = await res.json();
+  if (!j.results || !j.results.some((r) => r.status >= 200 && r.status < 300)) throw new Error("no device");
+}
 function drawBadgeState() {
   const btn = $("badgeBtn"), st = $("badgeState");
-  if (!badgeSupported) {
-    btn.hidden = true;
-    st.textContent = "지금 연 화면에서는 아이콘 숫자를 쓸 수 없어요. 홈 화면(아이폰)이나 독(맥)에 추가한 공책 앱으로 열면 켤 수 있어요.";
+  btn.hidden = true;
+  if (!pushSupported) {
+    st.textContent = badgeSupported
+      ? "이 화면에서는 바로 알림을 받을 수 없어요. 아래 ntfy를 써 주세요."
+      : "지금 연 화면에서는 쓸 수 없어요. 아이폰은 홈 화면에 추가한 공책 앱으로, 맥은 독에 추가한 공책 앱으로 열면 켤 수 있어요.";
     return;
   }
-  const perm = "Notification" in window ? Notification.permission : "granted";
-  if (perm === "granted") { btn.hidden = true; st.textContent = "켜져 있어요. 새 글·대화가 오면 아이콘에 숫자가 나와요."; }
-  else if (perm === "denied") { btn.hidden = true; st.textContent = "알림이 꺼져 있어요. 설정 → 알림에서 '우리 공책'을 허용해 주세요."; }
-  else { btn.hidden = false; st.textContent = "켜기를 누르고 '허용'을 고르면 아이콘에 숫자가 나와요."; }
+  if (!PUSH_URL) { st.textContent = "알림 서버를 연결하는 중이에요. 조금만 기다려 주세요."; return; }
+  const perm = Notification.permission;
+  const mine = pushSubsOf(myP()).length;
+  if (perm === "granted" && mine) st.textContent = "켜져 있어요. 공책이 닫혀 있어도 알림이 오고 아이콘에 숫자가 쌓여요.";
+  else if (perm === "denied") st.textContent = "알림이 꺼져 있어요. 아이폰 설정 → 알림 → '우리 공책'에서 허용해 주세요.";
+  else { btn.hidden = false; st.textContent = "켜기를 누르고 '허용'을 고르면 돼요."; }
 }
 $("badgeBtn").addEventListener("click", async () => {
-  try { if ("Notification" in window) await Notification.requestPermission(); } catch (e) {}
+  let ok = false;
+  try { ok = await enablePush(true); } catch (e) { ok = false; }
   lastBadge = -1; drawBadgeState(); if (me) render();
-  toast(("Notification" in window && Notification.permission === "granted") ? "아이콘 숫자를 켰어요" : "허용하지 않아서 켜지 못했어요");
+  toast(ok ? "이 기기로 알림을 받아요" : "켜지 못했어요. 알림을 허용했는지 확인해 주세요", 3500);
 });
 
 $("testPush").addEventListener("click", async () => {
@@ -1017,7 +1085,8 @@ $("testPush").addEventListener("click", async () => {
 function pushOther(kind, text, where) {
   const oid = otherId(); if (!oid) return;
   const o = people[oid];
-  if (!o.ntfyTopic) return;
+  const webSubs = PUSH_URL ? pushSubsOf(o) : [];
+  if (!o.ntfyTopic && !webSubs.length) return;
   const prefs = { msg: true, note: true, enter: true, preview: false, ...(o.notify || {}) };
   // 어느 화면 소식인지: 대화(msg·beep·voice), 함께(wish), 나머지는 공책
   const area = kind === "react" ? where : (["msg", "beep", "voice"].includes(kind) ? "chat" : kind === "wish" ? "together" : "note");
@@ -1045,7 +1114,11 @@ function pushOther(kind, text, where) {
                 reply: "speech_balloon", wish: "star", wishdone: "white_check_mark", enter: "wave", react: "heart", mood: "sunny" }[kind];
   // 알림을 누르면 그 화면으로 바로 열림
   const click = SITE + "#" + (area === "chat" ? "chat" : area === "together" ? "together" : "note");
-  sendNtfy(o.ntfyTopic, showText ? myName + "님이 " + what : "우리 둘의 공책", body, tag, click).catch(() => {});
+  const title = showText ? myName + "님이 " + what : "우리 둘의 공책";
+  const viaNtfy = () => { if (o.ntfyTopic) sendNtfy(o.ntfyTopic, title, body, tag, click).catch(() => {}); };
+  // 상대가 "이 기기로 바로 알림 받기"를 켰으면 웹 푸시로, 실패하면 ntfy로
+  if (webSubs.length) sendWebPush(webSubs, { title, body, url: click }).catch(viaNtfy);
+  else viaNtfy();
 }
 
 // ================= 삐삐 =================
