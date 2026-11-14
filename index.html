@@ -1075,6 +1075,15 @@ $("badgeBtn").addEventListener("click", async () => {
 });
 
 $("testPush").addEventListener("click", async () => {
+  // "이 기기로 바로 알림 받기"를 켠 기기가 있으면 그쪽으로, 없으면 ntfy로
+  const mine = PUSH_URL ? pushSubsOf(myP()) : [];
+  if (mine.length) {
+    try {
+      await sendWebPush(mine, { title: "우리 둘의 공책", body: "시험 알림이에요. 이게 보이면 설정 끝!", url: SITE + "#note" });
+      toast("보냈어요. 알림이 왔는지 확인해 보세요 (안 보이면 알림 센터를 내려 보세요)", 5000);
+    } catch (e) { toast("알림을 보내지 못했어요. 인터넷 연결을 확인해 주세요."); }
+    return;
+  }
   const t = await ensureTopic(); drawBell();
   try { await sendNtfy(t, "우리 둘의 공책", "시험 알림이에요. 이게 보이면 설정 끝!", "bell"); toast("보냈어요. 휴대폰을 확인해 보세요"); }
   catch (e) { toast("알림을 보내지 못했어요. 인터넷 연결을 확인해 주세요."); }
