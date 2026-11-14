@@ -982,7 +982,7 @@ async function sendNtfy(topic, title, message, tags, click) {
 }
 // ---- 앱 아이콘 숫자 + 웹 푸시 (홈 화면·독에 추가한 공책 앱) ----
 // 알림 중계 서버(Cloudflare) 주소. 비어 있으면 웹 푸시는 꺼져 있고 ntfy만 씀
-const PUSH_URL = "";
+const PUSH_URL = "https://our-notebook-push.soyoulkim.workers.dev";
 const VAPID_PUBLIC = "BKosJjO_z7JQ33DV70NS1Iky1EKtT8qNb7fmOnzjOsFeWOCfKeSisp5bngVrM5LvTzgFmCauzQ2hDLMjc4YpDso";
 const badgeSupported = "setAppBadge" in navigator;
 const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
