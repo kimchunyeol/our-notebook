@@ -169,7 +169,7 @@ button.mood { font-family: var(--f-ui); font-weight: 400; cursor: pointer; }
 .bell { gap: 12px; }
 /* Face ID 잠금 화면 */
 .lock {
-  position: fixed; inset: 0; z-index: 60; background: var(--paper);
+  position: fixed; inset: 0; z-index: 60; background: var(--paper); cursor: pointer; -webkit-tap-highlight-color: transparent;
   display: grid; place-items: center;
   padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
@@ -595,7 +595,7 @@ button.chat-photo { background: transparent; padding: 0; }
   <div class="lock-box">
     <div class="lock-icon" aria-hidden="true"></div>
     <p class="lock-title">우리 둘의 공책</p>
-    <p class="lock-sub" id="lockMsg">잠겨 있어요</p>
+    <p class="lock-sub" id="lockMsg">화면을 누르면 Face ID로 열려요</p>
     <button type="button" class="primary" id="unlockBtn">Face ID로 열기</button>
     <button type="button" class="lock-help" id="lockHelpBtn">Face ID가 안 되나요?</button>
     <div class="lock-fallback" id="lockFallback" hidden>
@@ -774,10 +774,9 @@ function lockNow() {
   if (!lockCred || !me) return;
   closePicker && closePicker();
   $("lockFallback").hidden = true; $("lockHelpBtn").hidden = false;
-  $("lockMsg").textContent = "잠겨 있어요";
+  $("lockMsg").textContent = "화면을 누르면 Face ID로 열려요";
   $("lockScreen").hidden = false;
   document.body.classList.add("locked");
-  if (document.visibilityState === "visible") setTimeout(unlock, 300);   // 바로 Face ID 창 띄우기 (안 뜨면 버튼을 눌러요)
 }
 function unlockDone() { $("lockScreen").hidden = true; document.body.classList.remove("locked"); }
 async function unlock() {
@@ -791,24 +790,26 @@ async function unlock() {
     } });
     unlockDone();
   } catch (e) {
-    $("lockMsg").textContent = "확인하지 못했어요. 아래 버튼을 눌러 다시 해 보세요";
+    $("lockMsg").textContent = "확인하지 못했어요. 화면을 한 번 더 눌러 주세요";
   }
   unlocking = false;
 }
-$("unlockBtn").addEventListener("click", unlock);
+// 아이폰은 화면을 누른 순간에만 Face ID를 바로 켜 줘요 → 잠금 화면 아무 곳이나 누르면 열기
+$("lockScreen").addEventListener("click", (e) => {
+  if (e.target.closest("#lockHelpBtn, #lockFallback")) return;
+  unlock();
+});
 $("lockHelpBtn").addEventListener("click", () => { $("lockFallback").hidden = false; $("lockHelpBtn").hidden = true; });
 $("lockLogout").addEventListener("click", () => { signOut(auth).then(() => location.reload()); });
 // 처음 열 때: 잠금이 켜져 있으면 공책 내용이 보이기 전에 덮어 둠
 if (lockCred) {
   $("lockScreen").hidden = false; document.body.classList.add("locked");
-  if (document.visibilityState === "visible") setTimeout(unlock, 400);   // 바로 Face ID 창 (안 뜨면 버튼을 눌러요)
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
   const fromPicker = pickingAt && Date.now() - pickingAt < 3 * 60 * 1000;
   pickingAt = 0;
   if (lockCred && me && hiddenAt && !unlocking && !fromPicker && Date.now() - hiddenAt >= LOCK_AFTER_MS) lockNow();
-  else if (!$("lockScreen").hidden) setTimeout(unlock, 300);
 });
 // 설정: 켜기 / 끄기
 async function drawLockState() {
