@@ -167,6 +167,22 @@ button.mood { font-family: var(--f-ui); font-weight: 400; cursor: pointer; }
 /* 공책 / 대화 전환 */
 /* 알림 설정 */
 .bell { gap: 12px; }
+/* Face ID 잠금 화면 */
+.lock {
+  position: fixed; inset: 0; z-index: 60; background: var(--paper);
+  display: grid; place-items: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+body.locked { overflow: hidden; }
+body.locked .toast { display: none; }
+.lock-box { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 320px; }
+.lock-icon { width: 64px; height: 64px; border-radius: 18px; background: var(--pen) url("icon-192.png") center / cover; margin-bottom: 6px; }
+.lock-title { margin: 0; font-family: var(--f-letter); font-size: 1.5rem; font-weight: 700; }
+.lock-sub { margin: 0 0 10px; color: var(--ink-soft); font-size: 0.9rem; }
+.lock-box .primary { padding: 11px 28px; font-size: 1rem; }
+.lock-help { background: transparent; color: var(--ink-soft); font-size: 0.82rem; text-decoration: underline; text-underline-offset: 3px; }
+.lock-fallback { display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--ink-soft); }
+.lock-fallback p { margin: 0; }
 .bell-h { margin: 0; font-family: var(--f-letter); font-size: 1.15rem; }
 .bell-p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
 .bell-steps { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem; }
@@ -394,7 +410,7 @@ button.chat-photo { background: transparent; padding: 0; }
       <h1>우리 둘의 공책</h1>
       <p class="sub">하루 있었던 일, 하고 싶은 말을 적어 두면 서로 읽을 수 있어요.</p>
     </div>
-    <div class="who" id="who" hidden><span id="meName"></span><button type="button" class="ghost" id="bellBtn" aria-expanded="false">알림 설정</button><button type="button" class="ghost" id="logout">나가기</button></div>
+    <div class="who" id="who" hidden><span id="meName"></span><button type="button" class="ghost" id="bellBtn" aria-expanded="false">설정</button><button type="button" class="ghost" id="logout">나가기</button></div>
   </header>
 
   <!-- 1) 로그인 화면 -->
@@ -431,6 +447,14 @@ button.chat-photo { background: transparent; padding: 0; }
 
     <!-- 알림 설정 (ntfy) -->
     <section class="card bell" id="bellPanel" hidden>
+      <h2 class="bell-h">잠금</h2>
+      <div class="badge-row">
+        <div>
+          <b>🔒 Face ID로 열기</b>
+          <p class="bell-p" id="lockState">공책을 열 때마다 Face ID로 확인해요. 이 기기에만 적용돼요.</p>
+        </div>
+        <button type="button" class="ghost" id="lockToggle">켜기</button>
+      </div>
       <h2 class="bell-h">휴대폰 알림 받기</h2>
       <p class="bell-p">공책이 닫혀 있어도 그분이 메시지나 글을 남기면 휴대폰에 알림이 와요. 처음 한 번만 설정하면 돼요.</p>
       <ol class="bell-steps">
@@ -567,6 +591,19 @@ button.chat-photo { background: transparent; padding: 0; }
   </div>
 </div>
 <div class="viewer" id="viewer" hidden><img id="viewerImg" alt="크게 본 사진"><button type="button" id="viewerClose">닫기</button></div>
+<div class="lock" id="lockScreen" role="dialog" aria-modal="true" aria-label="공책 잠금" hidden>
+  <div class="lock-box">
+    <div class="lock-icon" aria-hidden="true"></div>
+    <p class="lock-title">우리 둘의 공책</p>
+    <p class="lock-sub" id="lockMsg">잠겨 있어요</p>
+    <button type="button" class="primary" id="unlockBtn">Face ID로 열기</button>
+    <button type="button" class="lock-help" id="lockHelpBtn">Face ID가 안 되나요?</button>
+    <div class="lock-fallback" id="lockFallback" hidden>
+      <p>나가기를 누르면 이메일과 비밀번호로 다시 들어올 수 있어요.</p>
+      <button type="button" class="ghost" id="lockLogout">나가고 비밀번호로 들어가기</button>
+    </div>
+  </div>
+</div>
 <div class="react-picker" id="reactPicker" role="dialog" aria-label="반응 고르기" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
@@ -716,9 +753,90 @@ setInterval(drawPresence, 20 * 1000);
 $("loginBox").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("loginErr").hidden = true;
-  try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
+  try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); try { sessionStorage.setItem("nb-unlocked", "1"); } catch (e) {} }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
+// ================= Face ID 잠금 =================
+// 이 기기에서 만든 Face ID(Touch ID) 열쇠로 확인. 열쇠 id는 이 기기에만 저장
+const LOCK_KEY = "nb-lock-cred";
+const LOCK_AFTER_MS = 60 * 1000;   // 다른 앱에 1분 넘게 있다 오면 다시 잠금
+let lockCred = null, hiddenAt = 0, unlocking = false;
+try { lockCred = localStorage.getItem(LOCK_KEY); } catch (e) {}
+const toB64u = (buf) => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const fromB64u = (s) => { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; const bin = atob(s); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; };
+async function lockSupported() {
+  try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }
+  catch (e) { return false; }
+}
+function justLoggedIn() { try { return sessionStorage.getItem("nb-unlocked") === "1"; } catch (e) { return false; } }
+function lockNow() {
+  if (!lockCred || !me || justLoggedIn()) return;
+  closePicker && closePicker();
+  $("lockFallback").hidden = true; $("lockHelpBtn").hidden = false;
+  $("lockMsg").textContent = "잠겨 있어요";
+  $("lockScreen").hidden = false;
+  document.body.classList.add("locked");
+  if (document.visibilityState === "visible") setTimeout(unlock, 300);   // 바로 Face ID 창 띄우기 (안 뜨면 버튼을 눌러요)
+}
+function unlockDone() { $("lockScreen").hidden = true; document.body.classList.remove("locked"); }
+async function unlock() {
+  if (unlocking || $("lockScreen").hidden) return;
+  unlocking = true;
+  try {
+    await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type: "public-key", id: fromB64u(lockCred), transports: ["internal"] }],
+      userVerification: "required", timeout: 60000,
+    } });
+    unlockDone();
+  } catch (e) {
+    $("lockMsg").textContent = "확인하지 못했어요. 아래 버튼을 눌러 다시 해 보세요";
+  }
+  unlocking = false;
+}
+$("unlockBtn").addEventListener("click", unlock);
+$("lockHelpBtn").addEventListener("click", () => { $("lockFallback").hidden = false; $("lockHelpBtn").hidden = true; });
+$("lockLogout").addEventListener("click", () => { signOut(auth).then(() => location.reload()); });
+// 처음 열 때: 잠금이 켜져 있으면 공책 내용이 보이기 전에 덮어 둠
+if (lockCred && !justLoggedIn()) {
+  $("lockScreen").hidden = false; document.body.classList.add("locked");
+  if (document.visibilityState === "visible") setTimeout(unlock, 400);   // 바로 Face ID 창 (안 뜨면 버튼을 눌러요)
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+  if (lockCred && me && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) lockNow();
+  else if (!$("lockScreen").hidden) setTimeout(unlock, 300);
+});
+// 설정: 켜기 / 끄기
+async function drawLockState() {
+  const btn = $("lockToggle"), st = $("lockState");
+  if (lockCred) { btn.hidden = false; btn.textContent = "끄기"; st.textContent = "켜져 있어요. 공책을 열 때와 1분 넘게 다른 앱에 있다 돌아올 때 Face ID로 확인해요."; return; }
+  if (!(await lockSupported())) { btn.hidden = true; st.textContent = "이 기기나 이 화면에서는 쓸 수 없어요. 아이폰은 홈 화면에 추가한 공책 앱으로 열어 주세요."; return; }
+  btn.hidden = false; btn.textContent = "켜기";
+  st.textContent = "공책을 열 때마다 Face ID로 확인해요. 이 기기에만 적용돼요.";
+}
+$("lockToggle").addEventListener("click", async () => {
+  if (lockCred) {
+    lockCred = null; try { localStorage.removeItem(LOCK_KEY); } catch (e) {}
+    drawLockState(); toast("Face ID 잠금을 껐어요"); return;
+  }
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: "우리 둘의 공책" },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "우리 공책 잠금", displayName: "우리 공책 잠금" },
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
+      timeout: 60000, attestation: "none",
+    } });
+    lockCred = toB64u(cred.rawId);
+    try { localStorage.setItem(LOCK_KEY, lockCred); } catch (e) {}
+    drawLockState(); toast("🔒 Face ID 잠금을 켰어요", 3000);
+  } catch (e) {
+    toast(e && e.name === "NotAllowedError" ? "취소했어요. 다시 켜려면 켜기를 눌러 주세요" : "켜지 못했어요. 이 기기에서 Face ID를 쓸 수 있는지 확인해 주세요", 4000);
+  }
+});
+
 // 나가기는 실수로 누르지 않게 한 번 더 확인
 let logoutArmed = null;
 $("logout").addEventListener("click", async () => {
@@ -763,7 +881,7 @@ onAuthStateChanged(auth, (u) => { retries = 0; startSession(u); });
 function startSession(u) {
   unsubs.forEach((f) => f()); unsubs = [];
   me = u; loaded = false; letters = []; replies = []; firstLetters = true; firstReplies = true;
-  if (!u) { $("who").hidden = true; show("loginBox"); return; }
+  if (!u) { $("who").hidden = true; show("loginBox"); unlockDone(); return; }
   // 로그인하면 비밀번호 칸을 없애서 암호 자동완성 창이 다시 뜨지 않게 함
   const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
   seenBefore = loadSeen(); loadRead();
@@ -959,8 +1077,8 @@ $("bellBtn").addEventListener("click", async () => {
   const open = $("bellPanel").hidden;
   $("bellPanel").hidden = !open;
   $("bellBtn").setAttribute("aria-expanded", String(open));
-  $("bellBtn").textContent = open ? "닫기" : "알림 설정";
-  if (open) { drawBadgeState(); await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  $("bellBtn").textContent = open ? "닫기" : "설정";
+  if (open) { drawBadgeState(); drawLockState(); await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 $("copyTopic").addEventListener("click", async () => {
   const t = myP().ntfyTopic; if (!t) return;
