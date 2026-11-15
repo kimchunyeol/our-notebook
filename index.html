@@ -753,13 +753,15 @@ setInterval(drawPresence, 20 * 1000);
 $("loginBox").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("loginErr").hidden = true;
-  try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); try { sessionStorage.setItem("nb-unlocked", "1"); } catch (e) {} }
+  try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value); }
   catch (err) { $("loginErr").textContent = "이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요."; $("loginErr").hidden = false; }
 });
 // ================= Face ID 잠금 =================
 // 이 기기에서 만든 Face ID(Touch ID) 열쇠로 확인. 열쇠 id는 이 기기에만 저장
 const LOCK_KEY = "nb-lock-cred";
-const LOCK_AFTER_MS = 60 * 1000;   // 다른 앱에 1분 넘게 있다 오면 다시 잠금
+const LOCK_AFTER_MS = 0;   // 공책을 열 때마다(다른 앱에 갔다 와도) 무조건 다시 잠금
+let pickingAt = 0;         // 사진 고르기·카메라 창을 띄운 시각 (그때 잠깐 화면이 가려져도 잠그지 않음)
+document.addEventListener("click", (e) => { if (e.target && e.target.closest && e.target.closest('input[type="file"], label.photo-btn, label.chat-photo')) pickingAt = Date.now(); }, true);
 let lockCred = null, hiddenAt = 0, unlocking = false;
 try { lockCred = localStorage.getItem(LOCK_KEY); } catch (e) {}
 const toB64u = (buf) => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
@@ -768,9 +770,8 @@ async function lockSupported() {
   try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }
   catch (e) { return false; }
 }
-function justLoggedIn() { try { return sessionStorage.getItem("nb-unlocked") === "1"; } catch (e) { return false; } }
 function lockNow() {
-  if (!lockCred || !me || justLoggedIn()) return;
+  if (!lockCred || !me) return;
   closePicker && closePicker();
   $("lockFallback").hidden = true; $("lockHelpBtn").hidden = false;
   $("lockMsg").textContent = "잠겨 있어요";
@@ -798,19 +799,21 @@ $("unlockBtn").addEventListener("click", unlock);
 $("lockHelpBtn").addEventListener("click", () => { $("lockFallback").hidden = false; $("lockHelpBtn").hidden = true; });
 $("lockLogout").addEventListener("click", () => { signOut(auth).then(() => location.reload()); });
 // 처음 열 때: 잠금이 켜져 있으면 공책 내용이 보이기 전에 덮어 둠
-if (lockCred && !justLoggedIn()) {
+if (lockCred) {
   $("lockScreen").hidden = false; document.body.classList.add("locked");
   if (document.visibilityState === "visible") setTimeout(unlock, 400);   // 바로 Face ID 창 (안 뜨면 버튼을 눌러요)
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
-  if (lockCred && me && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) lockNow();
+  const fromPicker = pickingAt && Date.now() - pickingAt < 3 * 60 * 1000;
+  pickingAt = 0;
+  if (lockCred && me && hiddenAt && !unlocking && !fromPicker && Date.now() - hiddenAt >= LOCK_AFTER_MS) lockNow();
   else if (!$("lockScreen").hidden) setTimeout(unlock, 300);
 });
 // 설정: 켜기 / 끄기
 async function drawLockState() {
   const btn = $("lockToggle"), st = $("lockState");
-  if (lockCred) { btn.hidden = false; btn.textContent = "끄기"; st.textContent = "켜져 있어요. 공책을 열 때와 1분 넘게 다른 앱에 있다 돌아올 때 Face ID로 확인해요."; return; }
+  if (lockCred) { btn.hidden = false; btn.textContent = "끄기"; st.textContent = "켜져 있어요. 공책을 열 때마다, 다른 앱에 갔다 돌아올 때마다 Face ID로 확인해요."; return; }
   if (!(await lockSupported())) { btn.hidden = true; st.textContent = "이 기기나 이 화면에서는 쓸 수 없어요. 아이폰은 홈 화면에 추가한 공책 앱으로 열어 주세요."; return; }
   btn.hidden = false; btn.textContent = "켜기";
   st.textContent = "공책을 열 때마다 Face ID로 확인해요. 이 기기에만 적용돼요.";
