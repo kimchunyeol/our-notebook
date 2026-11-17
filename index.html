@@ -681,19 +681,23 @@ const countNew = (item) => isNew(item) && !ackIds.has(readKeyOf(item));
 const BEAT_MS = 60 * 1000;
 const isHere = (p) => !!(p && p.here && p.lastActive && Date.now() - tms(p.lastActive) < 3 * BEAT_MS);
 let beatTimer = null;
+// Face ID 잠금 화면이 떠 있는 동안은 "들어온 것"으로 치지 않음
+function isLocked() { const l = document.getElementById("lockScreen"); return !!l && !l.hidden; }
 function heartbeat() {
   clearInterval(beatTimer);
   if (!me) return;
   // leftBy: 어떻게 나갔는지 — "logout"(나가기 버튼) / "close"(공책을 닫거나 다른 앱으로)
   const write = (here, leftBy) => setDoc(doc(db, "people", me.uid),
     { here, leftBy: here ? "" : (leftBy || "close"), lastActive: serverTimestamp() }, { merge: true }).catch(() => {});
-  if (document.visibilityState === "visible") write(true);
-  beatTimer = setInterval(() => { if (me && document.visibilityState === "visible") write(true); }, BEAT_MS);
+  if (document.visibilityState === "visible" && !isLocked()) write(true);
+  beatTimer = setInterval(() => { if (me && document.visibilityState === "visible" && !isLocked()) write(true); }, BEAT_MS);
   heartbeat.write = write;
 }
 document.addEventListener("visibilitychange", () => {
   if (!me || !heartbeat.write) return;
-  heartbeat.write(document.visibilityState === "visible");
+  if (document.visibilityState === "hidden") { heartbeat.write(false); return; }
+  // 돌아왔을 때 잠금이 다시 걸리는지 먼저 본 뒤, 잠기지 않았을 때만 "들어옴"
+  setTimeout(() => { if (me && heartbeat.write && !isLocked()) heartbeat.write(true); }, 0);
 });
 function ago(m) {
   const s = Math.max(0, Math.round((Date.now() - m) / 1000));
@@ -780,7 +784,15 @@ function lockNow() {
   document.body.classList.add("locked");
   if (document.visibilityState === "visible") setTimeout(unlock, 300);   // 바로 Face ID 창 띄우기 (안 뜨면 버튼을 눌러요)
 }
-function unlockDone() { $("lockScreen").hidden = true; document.body.classList.remove("locked"); }
+function unlockDone() {
+  const wasLocked = !$("lockScreen").hidden;
+  $("lockScreen").hidden = true; document.body.classList.remove("locked");
+  // Face ID를 통과한 이 순간에 "들어왔어요"를 기록하고 상대에게 알림
+  if (wasLocked && me) {
+    if (heartbeat.write && document.visibilityState === "visible") heartbeat.write(true);
+    maybePushEnter();
+  }
+}
 async function unlock() {
   if (unlocking || $("lockScreen").hidden) return;
   unlocking = true;
@@ -1757,7 +1769,7 @@ function reactRow(target, where) {
 let enterChecked = false;
 const LAST_KEY = "nb-last-open";
 function maybePushEnter() {
-  if (enterChecked || !me || document.visibilityState !== "visible" || !otherId()) return;
+  if (enterChecked || !me || document.visibilityState !== "visible" || !otherId() || isLocked()) return;
   enterChecked = true;
   let last = 0; try { last = Number(localStorage.getItem(LAST_KEY)) || 0; } catch (e) {}
   // 10분 넘게 비웠다가 들어오면 상대 휴대폰에 알림
@@ -1765,10 +1777,11 @@ function maybePushEnter() {
   try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {}
 }
 function stampLastOpen() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} }
-setInterval(() => { if (me && document.visibilityState === "visible") stampLastOpen(); }, 60 * 1000);
+setInterval(() => { if (me && document.visibilityState === "visible" && !isLocked()) stampLastOpen(); }, 60 * 1000);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") { if (me) stampLastOpen(); enterChecked = false; }
-  else maybePushEnter();
+  // 잠금을 풀지 않고 나간 경우는 "열었던 시각"으로 치지 않음
+  if (document.visibilityState === "hidden") { if (me && !isLocked()) stampLastOpen(); enterChecked = false; }
+  else setTimeout(maybePushEnter, 0);
 });
 
 // ================= 대화 =================
