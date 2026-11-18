@@ -305,36 +305,10 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
 .chat-bar .primary { padding: 9px 16px; }
 .chat-photo { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer; }
 button.chat-photo { background: transparent; padding: 0; }
-.chat-beep[aria-expanded="true"] { color: var(--pen); border-color: var(--pen); background: var(--pen-soft); }
 
 /* 삐삐 — 옛날 액정 화면 느낌 */
 :root { --lcd-bg: #B9C9A2; --lcd-ink: #22301A; --lcd-dim: #5C6F4A; }
-.pager-sheet {
-  flex: none; border-top: 1px solid var(--line); background: var(--sheet);
-  padding: 12px max(12px, env(safe-area-inset-right, 0px)) 4px max(12px, env(safe-area-inset-left, 0px));
-  display: flex; flex-direction: column; gap: 10px; max-height: 60%; overflow-y: auto;
-}
-.pager { background: #2B2F36; border-radius: 14px; padding: 10px; }
-.pager-lcd {
-  background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 6px; padding: 6px 12px;
-  display: flex; align-items: center; gap: 10px; min-height: 52px;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,.25);
-}
-.pager-lcd output { font-family: "VT323", ui-monospace, Menlo, monospace; font-size: 2.4rem; line-height: 1; letter-spacing: 0.12em; overflow-wrap: anywhere; min-width: 0; }
 .pager-tag { font-family: "VT323", ui-monospace, monospace; font-size: 0.95rem; color: var(--lcd-dim); border: 1px solid var(--lcd-dim); border-radius: 3px; padding: 0 4px; flex: none; }
-.pager-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.pager-mean { margin: 0 auto 0 2px; font-size: 0.8rem; color: #C9CED8; min-width: 0; }
-.pager-close { background: transparent; color: #C9CED8; border: 1px solid #4A505B; padding: 6px 12px; font-size: 0.85rem; }
-.pager-row .primary { padding: 7px 16px; }
-.pager-row .primary:disabled { opacity: .4; }
-.pager-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.pager-preset { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 0; color: var(--ink); }
-.pager-preset b { font-family: "VT323", ui-monospace, monospace; font-size: 1.3rem; font-weight: 400; letter-spacing: 0.06em; line-height: 1.1; }
-.pager-preset span { font-size: 0.7rem; color: var(--ink-soft); }
-.pager-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.pager-key { background: var(--paper); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 5px 0; font-family: "VT323", ui-monospace, monospace; font-size: 1.5rem; font-weight: 400; line-height: 1.2; }
-.pager-key:active, .pager-preset:active { background: var(--pen-soft); }
-.pager-del { grid-column: 1 / -1; font-family: var(--f-ui); font-size: 0.85rem; padding: 6px 0; color: var(--ink-soft); }
 .bubble.beep, .msg.me .bubble.beep { background: #2B2F36; border: 0; padding: 6px; color: #E7EAF4; display: flex; flex-direction: column; gap: 4px; }
 .beep-lcd { background: var(--lcd-bg); color: var(--lcd-ink); border-radius: 5px; padding: 4px 10px; display: flex; align-items: center; gap: 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,.25); }
 .beep-code { font-family: "VT323", ui-monospace, Menlo, monospace; font-size: 1.9rem; line-height: 1; letter-spacing: 0.12em; overflow-wrap: anywhere; }
@@ -512,19 +486,6 @@ button.chat-photo { background: transparent; padding: 0; }
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
       <div class="typing" id="typingRow" aria-live="polite" hidden><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="typingText"></span></div>
       <div class="pics chat-pending" id="chatPending" hidden></div>
-      <!-- 삐삐 보내기 -->
-      <div class="pager-sheet" id="pagerSheet" hidden>
-        <div class="pager">
-          <div class="pager-lcd" aria-live="polite"><span class="pager-tag">BEEP</span><output id="pagerOut">_</output></div>
-          <div class="pager-row">
-            <p class="pager-mean" id="pagerMean">숫자를 눌러 신호를 만들어 보세요</p>
-            <button type="button" class="pager-close" id="pagerClose">닫기</button>
-            <button type="button" class="primary" id="pagerSend" disabled>보내기</button>
-          </div>
-        </div>
-        <div class="pager-presets" id="pagerPresets"></div>
-        <div class="pager-keys" id="pagerKeys"></div>
-      </div>
       <div class="rec-bar" id="recBar" hidden>
         <button type="button" class="ghost" id="recCancel">취소</button>
         <div class="rec-state" aria-live="polite"><span class="rec-dot" aria-hidden="true"></span><span id="recTime">0:00 / 1:30</span></div>
@@ -535,9 +496,6 @@ button.chat-photo { background: transparent; padding: 0; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg>
           <input type="file" id="chatPhotoIn" accept="image/*" multiple>
         </label>
-        <button type="button" class="chat-photo chat-beep" id="beepBtn" aria-label="삐삐 보내기" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="7" y="7" width="10" height="5" rx="1"/><path d="M8 16h2M14 16h2"/></svg>
-        </button>
         <button type="button" class="chat-photo chat-mic" id="micBtn" aria-label="음성 메시지 녹음">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
         </button>
@@ -1014,11 +972,6 @@ function startSession(u) {
             && (view !== "chat" || document.visibilityState !== "visible")) {
           alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
         }
-        // 삐삐는 대화 화면을 보고 있어도 소리로 알려 줌
-        if (c.type === "added" && m.beep && m.author !== u.uid && !c.doc.metadata.hasPendingWrites) {
-          beepSound();
-          if (view === "chat" && document.visibilityState === "visible") toast("📟 " + nameOf(m.author) + "님 삐삐: " + m.beep, 4000);
-        }
       }
     }
     if (!(snap.metadata && snap.metadata.fromCache) && !purgeStarted) { purgeStarted = true; setTimeout(purgeOldChatPhotos, 3000); }
@@ -1294,73 +1247,6 @@ const BEEP_MEANS = {
   "112": "급해, 연락 줘",
   "045": "빵 사 와",
 };
-const BEEP_PRESETS = ["1004", "486", "0024", "8282", "1010235", "112"];
-let pagerCode = "";
-function drawPager() {
-  $("pagerOut").textContent = pagerCode || "_";
-  $("pagerMean").textContent = pagerCode ? (BEEP_MEANS[pagerCode] || "직접 만든 신호") : "숫자를 눌러 신호를 만들어 보세요";
-  $("pagerSend").disabled = !pagerCode;
-}
-(function buildPager() {
-  const pre = $("pagerPresets");
-  for (const c of BEEP_PRESETS) {
-    const b = el("button", "pager-preset"); b.type = "button";
-    b.append(el("b", null, c), el("span", null, BEEP_MEANS[c]));
-    b.onclick = () => { pagerCode = c; drawPager(); };
-    pre.append(b);
-  }
-  const keys = $("pagerKeys");
-  for (const k of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]) {
-    const b = el("button", "pager-key", k); b.type = "button";
-    b.onclick = () => { if (pagerCode.length < 16) { pagerCode += k; drawPager(); tick(); } };
-    keys.append(b);
-  }
-  const del = el("button", "pager-key pager-del", "지우기"); del.type = "button";
-  del.onclick = () => { pagerCode = pagerCode.slice(0, -1); drawPager(); };
-  keys.append(del);
-})();
-function openPager(open) {
-  $("pagerSheet").hidden = !open;
-  $("beepBtn").setAttribute("aria-expanded", String(open));
-  if (open) { pagerCode = ""; drawPager(); const log = $("chatLog"); setTimeout(() => (log.scrollTop = log.scrollHeight), 0); }
-}
-$("beepBtn").addEventListener("click", () => openPager($("pagerSheet").hidden));
-$("pagerClose").addEventListener("click", () => openPager(false));
-$("pagerSend").addEventListener("click", async () => {
-  if (!me || !pagerCode) return;
-  const code = pagerCode;
-  openPager(false);
-  try {
-    await addDoc(collection(db, "messages"), { author: me.uid, beep: code, createdAt: serverTimestamp() });
-    renderChat(true);
-    pushOther("beep", code);
-    toast("📟 삐삐를 보냈어요");
-  } catch (e) { toast("삐삐를 보내지 못했어요. 인터넷 연결을 확인해 주세요."); }
-});
-// 삐삐 소리 (공책이 열려 있을 때만 울려요. 화면을 한 번이라도 누른 뒤부터 소리가 나요)
-let audioCtx = null;
-function getAudio() {
-  try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {}
-  return audioCtx;
-}
-document.addEventListener("pointerdown", () => getAudio(), { once: true });
-function tone(ctx, at, freq, dur, vol) {
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.type = "square"; o.frequency.value = freq;
-  g.gain.setValueAtTime(0.0001, at);
-  g.gain.exponentialRampToValueAtTime(vol, at + 0.01);
-  g.gain.setValueAtTime(vol, at + dur - 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  o.connect(g).connect(ctx.destination);
-  o.start(at); o.stop(at + dur + 0.02);
-}
-function beepSound() {
-  const ctx = getAudio(); if (!ctx || ctx.state !== "running") return;
-  const t = ctx.currentTime + 0.02;
-  for (let i = 0; i < 3; i++) { tone(ctx, t + i * 0.22, 2400, 0.12, 0.06); }   // 삐-삐-삐
-  try { if (navigator.vibrate) navigator.vibrate([120, 80, 120, 80, 120]); } catch (e) {}
-}
-function tick() { const ctx = getAudio(); if (ctx && ctx.state === "running") tone(ctx, ctx.currentTime + 0.01, 1800, 0.04, 0.03); }
 
 // ================= 음성 메시지 =================
 // voices: {author, data(dataURL), mime, dur, createdAt} / messages: {author, voiceId, dur, createdAt}
@@ -1377,7 +1263,6 @@ function pickMime() {
 function showRec(on) {
   $("recBar").hidden = !on;
   $("chatForm").hidden = on;
-  if (on) { openPager(false); }
 }
 function endStream() { try { recStream && recStream.getTracks().forEach((t) => t.stop()); } catch (e) {} recStream = null; }
 async function startRec() {
