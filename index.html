@@ -204,11 +204,12 @@ body.locked .toast { display: none; }
 /* 대화 */
 /* 대화는 화면을 꽉 채움 — 높이는 키보드를 뺀 실제 보이는 높이(--vvh)를 따라감 */
 .chat {
-  position: fixed; left: 0; right: 0; top: 0; z-index: 20;
+  position: fixed; left: 0; right: 0; top: 0; z-index: 20; will-change: transform; transform: translateY(var(--vvtop, 0px));
   height: var(--vvh, 100vh); height: var(--vvh, 100dvh);
   background: var(--sheet); display: flex; flex-direction: column; overflow: hidden;
 }
-body.chat-open { overflow: hidden; }
+html.chat-open, html.chat-open body { overflow: hidden; height: 100%; overscroll-behavior: none; }
+html.chat-open body { position: fixed; left: 0; right: 0; top: 0; width: 100%; }
 .chat-head {
   display: flex; align-items: center; gap: 12px; flex: none;
   padding-top: calc(8px + env(safe-area-inset-top, 0px)); padding-bottom: 8px;
@@ -1709,6 +1710,7 @@ function setView(v) {
   $("chatView").hidden = v !== "chat";
   $("togetherView").hidden = v !== "together";
   document.body.classList.toggle("chat-open", v === "chat");
+  document.documentElement.classList.toggle("chat-open", v === "chat");
   if (v === "chat") { fitChat(); renderChat(true); markChatRead(); }
   if (v === "together") { markTogetherRead(); renderTogether(); }
   render();
@@ -1726,7 +1728,7 @@ function fitChat() {
   const kb = !!(vv && window.innerHeight - vv.height > 120);
   // 1~2px 정도 바뀐 건 무시 (계속 다시 맞추면 화면이 떨려요)
   if (Math.abs(h - fitH) > 2) { cv.style.setProperty("--vvh", h + "px"); fitH = h; }
-  if (Math.abs(top - fitTop) > 2) { cv.style.top = top + "px"; fitTop = top; }
+  if (Math.abs(top - fitTop) > 2) { cv.style.setProperty("--vvtop", top + "px"); fitTop = top; }
   if (kb !== fitKb) { cv.style.setProperty("--kb-safe", kb ? "0px" : "env(safe-area-inset-bottom, 0px)"); fitKb = kb; }
 }
 if (window.visualViewport) {
@@ -1746,6 +1748,9 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("scroll", onVV);
 }
 window.addEventListener("resize", () => { if (view === "chat") fitChat(); });
+window.addEventListener("scroll", () => {
+  if (view === "chat" && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+}, { passive: true });
 $("chatIn").addEventListener("focus", () => {
   // 키보드가 다 올라온 뒤 맨 아래 대화가 보이게
   setTimeout(() => { fitChat(); const log = $("chatLog"); log.scrollTop = log.scrollHeight; window.scrollTo(0, 0); }, 300);
