@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=VT323&display=swap">
 <style>
 :root {
-  --paper: #F2F4F8; --sheet: #FFFFFF; --ink: #1E2640; --ink-soft: #5C6684;
+  --paper: #F2F4F8; --paper-rgb: 242, 244, 248; --sheet: #FFFFFF; --ink: #1E2640; --ink-soft: #5C6684;
   --line: #DCE1EC; --pen: #3D4FB8; --pen-soft: #E6E9F8; --rose: #C2577A; --rose-soft: #F8E6EC; --danger: #B3364A;
   --f-letter: "Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
   --f-ui: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -21,7 +21,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #12151F; --sheet: #1B2030; --ink: #E7EAF4; --ink-soft: #9AA3BF;
+    --paper: #12151F; --paper-rgb: 18, 21, 31; --sheet: #1B2030; --ink: #E7EAF4; --ink-soft: #9AA3BF;
     --line: #2C3347; --pen: #93A2F2; --pen-soft: #262D4A; --rose: #EE93B2; --rose-soft: #3A2430; --danger: #F08A9A;
     color-scheme: dark;
   }
@@ -34,7 +34,25 @@ body {
   padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 [hidden] { display: none !important; }
+/* 첫 화면 배경 사진: 맨 위에 얼굴이 크게 보이고, 아래로 갈수록 바탕색으로 자연스럽게 이어짐 */
+.bg-photo {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 0;
+  width: min(100%, 560px); height: min(700px, 92vh);
+  background: center 48% / cover no-repeat; opacity: 0; transition: opacity .4s ease; pointer-events: none;
+}
+.bg-photo::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(var(--paper-rgb), .45) 0%, rgba(var(--paper-rgb), .05) 22%, rgba(var(--paper-rgb), 0) 55%, rgba(var(--paper-rgb), .7) 82%, rgba(var(--paper-rgb), 1) 100%); }
+@media (min-width: 600px) {   /* 넓은 화면에서는 사진 양옆을 부드럽게 */
+  .bg-photo { -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent); }
+}
+body.has-bg .bg-photo { opacity: 1; }
+/* 얼굴이 가려지지 않게 제목 아래에 빈자리 */
+body.has-bg header { margin-bottom: min(330px, 44vh); }
+body.has-bg header h1, body.has-bg header .sub, body.has-bg .who > span, body.has-bg .moods-label, body.has-bg .presence {
+  text-shadow: 0 0 6px rgba(var(--paper-rgb), .95), 0 0 16px rgba(var(--paper-rgb), .85); }
+body.has-bg .who .ghost { background: rgba(var(--paper-rgb), .82); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .wrap {
+  position: relative; z-index: 1;
   max-width: 680px; margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -390,6 +408,7 @@ button.chat-photo { background: transparent; padding: 0; }
 </style>
 </head>
 <body>
+<div class="bg-photo" id="bgPhoto" aria-hidden="true"></div>
 <div class="wrap">
   <header>
     <div>
@@ -440,6 +459,18 @@ button.chat-photo { background: transparent; padding: 0; }
           <p class="bell-p" id="lockState">공책을 열 때마다 Face ID로 확인해요. 이 기기에만 적용돼요.</p>
         </div>
         <button type="button" class="ghost" id="lockToggle">켜기</button>
+      </div>
+      <h2 class="bell-h">배경 사진</h2>
+      <div class="badge-row">
+        <div>
+          <b>🖼️ 첫 화면 배경</b>
+          <p class="bell-p" id="bgState">공책 첫 화면 뒤에 사진을 깔아요. 소열님 화면에만 보여요.</p>
+        </div>
+        <div style="display:flex;gap:6px;flex:none">
+          <button type="button" class="ghost" id="bgPick">사진 고르기</button>
+          <button type="button" class="ghost" id="bgRemove" hidden>빼기</button>
+        </div>
+        <input type="file" id="bgIn" accept="image/*" hidden>
       </div>
       <h2 class="bell-h">휴대폰 알림 받기</h2>
       <p class="bell-p">공책이 닫혀 있어도 그분이 메시지나 글을 남기면 휴대폰에 알림이 와요. 처음 한 번만 설정하면 돼요.</p>
@@ -801,6 +832,66 @@ async function drawLockState() {
   btn.hidden = false; btn.textContent = "켜기";
   st.textContent = "공책을 열 때마다 Face ID로 확인해요. 이 기기에만 적용돼요.";
 }
+// ================= 첫 화면 배경 사진 =================
+// 사진은 두 사람만 열 수 있는 Firebase(photos)에 두고, 사람 정보에 bgPhotoId 로 기억. 각자 자기 화면에만 보임
+const BG_KEY = "nb-bg";
+let bgShownId = null;
+function showBg(id, data) {
+  bgShownId = id || null;
+  const el = $("bgPhoto");
+  if (id && data) { el.style.backgroundImage = 'url("' + data + '")'; document.body.classList.add("has-bg"); }
+  else { document.body.classList.remove("has-bg"); el.style.backgroundImage = ""; }
+}
+function loadBgCache() {
+  try { const c = JSON.parse(localStorage.getItem(BG_KEY) || "null"); if (c && c.id && c.data) showBg(c.id, c.data); } catch (e) {}
+}
+async function syncBg() {
+  if (!me) return;
+  const id = myP().bgPhotoId || null;
+  drawBgState();
+  if (id === bgShownId) return;
+  if (!id) { showBg(null); try { localStorage.removeItem(BG_KEY); } catch (e) {} return; }
+  try {
+    const snap = await getDoc(doc(db, "photos", id));
+    if (!snap.exists() || (myP().bgPhotoId || null) !== id) return;
+    const data = snap.data().data;
+    showBg(id, data);
+    try { localStorage.setItem(BG_KEY, JSON.stringify({ id, data })); } catch (e) {}
+  } catch (e) {}
+}
+function drawBgState() {
+  const has = !!(me && myP().bgPhotoId);
+  $("bgRemove").hidden = !has;
+  $("bgPick").textContent = has ? "바꾸기" : "사진 고르기";
+  $("bgState").textContent = has ? "첫 화면 뒤에 사진이 깔려 있어요. 이 화면은 " + nameOf(me.uid) + "님에게만 보여요." : "공책 첫 화면 뒤에 사진을 깔아요. " + (me ? nameOf(me.uid) + "님" : "내") + " 화면에만 보여요.";
+}
+$("bgPick").addEventListener("click", () => $("bgIn").click());
+$("bgIn").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f || !me) return;
+  try {
+    toast("배경 사진을 올리는 중이에요…", 6000);
+    const data = await shrink(f);
+    const old = myP().bgPhotoId;
+    const ref = await addDoc(collection(db, "photos"), { author: me.uid, data, kind: "bg", createdAt: serverTimestamp() });
+    await setDoc(doc(db, "people", me.uid), { bgPhotoId: ref.id }, { merge: true });
+    showBg(ref.id, data);
+    try { localStorage.setItem(BG_KEY, JSON.stringify({ id: ref.id, data })); } catch (e) {}
+    if (old) deleteDoc(doc(db, "photos", old)).catch(() => {});   // 예전 배경 사진은 정리
+    toast("배경 사진을 바꿨어요");
+  } catch (err) { toast(saveErr(err, "배경 사진을 바꾸지"), 6000); }
+});
+$("bgRemove").addEventListener("click", async () => {
+  if (!me) return;
+  const old = myP().bgPhotoId;
+  try {
+    await setDoc(doc(db, "people", me.uid), { bgPhotoId: null }, { merge: true });
+    showBg(null); try { localStorage.removeItem(BG_KEY); } catch (e) {}
+    if (old) deleteDoc(doc(db, "photos", old)).catch(() => {});
+    toast("배경 사진을 뺐어요");
+  } catch (err) { toast(saveErr(err, "배경 사진을 빼지"), 6000); }
+});
+
 $("lockToggle").addEventListener("click", async () => {
   if (lockCred) {
     lockCred = null; try { localStorage.removeItem(LOCK_KEY); } catch (e) {}
@@ -867,7 +958,8 @@ onAuthStateChanged(auth, (u) => { retries = 0; startSession(u); });
 function startSession(u) {
   unsubs.forEach((f) => f()); unsubs = [];
   me = u; loaded = false; letters = []; replies = []; firstLetters = true; firstReplies = true;
-  if (!u) { $("who").hidden = true; show("loginBox"); unlockDone(); return; }
+  if (!u) { $("who").hidden = true; show("loginBox"); unlockDone(); showBg(null); return; }
+  loadBgCache();   // 지난번 배경을 바로 보여 주고, 새 정보가 오면 맞춤
   // 로그인하면 비밀번호 칸을 없애서 암호 자동완성 창이 다시 뜨지 않게 함
   const lb = $("loginBox"); if (lb) { $("pw").value = ""; lb.remove(); }
   seenBefore = loadSeen(); loadRead();
@@ -881,6 +973,7 @@ function startSession(u) {
     firstPeople = false;
     drawPresence();
     drawTyping();
+    syncBg();
     if (!$("bellPanel").hidden) { drawBell(); drawBadgeState(); }
     if (!(snap.metadata && snap.metadata.fromCache)) { maybePushEnter(); refreshPushOnce(); }
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
@@ -1066,7 +1159,7 @@ $("bellBtn").addEventListener("click", async () => {
   $("bellPanel").hidden = !open;
   $("bellBtn").setAttribute("aria-expanded", String(open));
   $("bellBtn").textContent = open ? "닫기" : "설정";
-  if (open) { drawBadgeState(); drawLockState(); await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (open) { drawBadgeState(); drawLockState(); drawBgState(); await ensureTopic(); drawBell(); $("bellPanel").scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 $("copyTopic").addEventListener("click", async () => {
   const t = myP().ntfyTopic; if (!t) return;
