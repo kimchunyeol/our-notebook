@@ -476,7 +476,7 @@ button.chat-photo { background: transparent; padding: 0; }
       <div class="badge-row">
         <div>
           <b>🖼️ 첫 화면 배경</b>
-          <p class="bell-p" id="bgState">공책 첫 화면 뒤에 사진을 깔아요. 소열님 화면에만 보여요.</p>
+          <p class="bell-p" id="bgState">공책 첫 화면 뒤에 사진을 깔아요. 두 분 화면에 같이 보여요.</p>
           <label class="bg-chat-opt" id="bgChatRow" hidden><input type="checkbox" id="bgChatOn" checked> 대화창에도 연하게 깔기</label>
         </div>
         <div style="display:flex;gap:6px;flex:none">
@@ -864,19 +864,40 @@ function showBg(id, data) {
 function loadBgCache() {
   try { const c = JSON.parse(localStorage.getItem(BG_KEY) || "null"); if (c && c.id && c.data) showBg(c.id, c.data); } catch (e) {}
 }
+// 두 사람이 같이 쓰는 배경: settings/couple 문서의 bgPhotoId (누가 바꿔도 둘 다 바뀜)
+// 예전에 각자 넣어 둔 배경(people.bgPhotoId)은 같이 쓰는 배경으로 한 번 옮겨 줌
+let sharedBg = { id: null, by: null, loaded: false };
+const bgIdNow = () => sharedBg.id || (me && myP().bgPhotoId) || null;
 async function syncBg() {
   if (!me) return;
-  const id = myP().bgPhotoId || null;
+  maybeMigrateBg();
   drawBgState();
+  const id = bgIdNow();
   if (id === bgShownId) return;
   if (!id) { showBg(null); try { localStorage.removeItem(BG_KEY); } catch (e) {} return; }
   try {
     const snap = await getDoc(doc(db, "photos", id));
-    if (!snap.exists() || (myP().bgPhotoId || null) !== id) return;
+    if (!snap.exists() || bgIdNow() !== id) return;
     const data = snap.data().data;
     showBg(id, data);
     try { localStorage.setItem(BG_KEY, JSON.stringify({ id, data })); } catch (e) {}
   } catch (e) {}
+}
+let bgMigrated = false;
+function onSharedBg(d) {
+  const prev = sharedBg.id;
+  sharedBg = { id: d.bgPhotoId || null, by: d.bgBy || null, loaded: true };
+  // 상대가 배경을 바꾸면 알려 줌
+  if (prev !== null && sharedBg.id && sharedBg.id !== prev && sharedBg.by && sharedBg.by !== me.uid) toast(nameOf(sharedBg.by) + "님이 배경 사진을 바꿨어요", 3500);
+  syncBg();
+}
+// 예전 개인 배경을 같이 쓰는 배경으로 옮기기 (한 번만, 같이 쓰는 배경이 비어 있을 때)
+function maybeMigrateBg() {
+  if (bgMigrated || !me || !sharedBg.loaded || sharedBg.id) return;
+  const mine = myP().bgPhotoId; if (!mine) return;
+  bgMigrated = true;
+  setDoc(doc(db, "settings", "couple"), { bgPhotoId: mine, bgBy: me.uid, bgAt: serverTimestamp() }, { merge: true })
+    .then(() => setDoc(doc(db, "people", me.uid), { bgPhotoId: null }, { merge: true })).catch(() => { bgMigrated = false; });
 }
 // 대화창에도 깔지 (이 기기에서만 기억)
 function chatBgOn() { try { return localStorage.getItem("nb-bg-chat") !== "0"; } catch (e) { return true; } }
@@ -886,11 +907,13 @@ $("bgChatOn").addEventListener("change", () => {
   applyChatBgPref();
 });
 function drawBgState() {
-  const has = !!(me && myP().bgPhotoId);
+  const has = !!(me && bgIdNow());
   $("bgChatRow").hidden = !has; $("bgChatOn").checked = chatBgOn();
   $("bgRemove").hidden = !has;
   $("bgPick").textContent = has ? "바꾸기" : "사진 고르기";
-  $("bgState").textContent = has ? "첫 화면 뒤에 사진이 깔려 있어요. 이 화면은 " + nameOf(me.uid) + "님에게만 보여요." : "공책 첫 화면 뒤에 사진을 깔아요. " + (me ? nameOf(me.uid) + "님" : "내") + " 화면에만 보여요.";
+  $("bgState").textContent = has
+    ? "두 분 화면에 같은 사진이 깔려 있어요" + (sharedBg.by ? " (" + nameOf(sharedBg.by) + "님이 골랐어요)" : "") + ". 누가 바꿔도 둘 다 바뀌어요."
+    : "공책 첫 화면 뒤에 사진을 깔아요. 두 분 화면에 같이 보여요.";
 }
 $("bgPick").addEventListener("click", () => $("bgIn").click());
 $("bgIn").addEventListener("change", async (e) => {
@@ -899,23 +922,25 @@ $("bgIn").addEventListener("change", async (e) => {
   try {
     toast("배경 사진을 올리는 중이에요…", 6000);
     const data = await shrink(f);
-    const old = myP().bgPhotoId;
+    const old = bgIdNow(), oldBy = sharedBg.id ? sharedBg.by : me.uid;
     const ref = await addDoc(collection(db, "photos"), { author: me.uid, data, kind: "bg", createdAt: serverTimestamp() });
-    await setDoc(doc(db, "people", me.uid), { bgPhotoId: ref.id }, { merge: true });
+    await setDoc(doc(db, "settings", "couple"), { bgPhotoId: ref.id, bgBy: me.uid, bgAt: serverTimestamp() }, { merge: true });
+    if (myP().bgPhotoId) setDoc(doc(db, "people", me.uid), { bgPhotoId: null }, { merge: true }).catch(() => {});
     showBg(ref.id, data);
     try { localStorage.setItem(BG_KEY, JSON.stringify({ id: ref.id, data })); } catch (e) {}
-    if (old) deleteDoc(doc(db, "photos", old)).catch(() => {});   // 예전 배경 사진은 정리
-    toast("배경 사진을 바꿨어요");
+    if (old && oldBy === me.uid) deleteDoc(doc(db, "photos", old)).catch(() => {});   // 내가 올렸던 예전 배경은 정리
+    toast("배경 사진을 바꿨어요. 두 분 화면에 같이 보여요", 3500);
   } catch (err) { toast(saveErr(err, "배경 사진을 바꾸지"), 6000); }
 });
 $("bgRemove").addEventListener("click", async () => {
   if (!me) return;
-  const old = myP().bgPhotoId;
+  const old = bgIdNow(), oldBy = sharedBg.id ? sharedBg.by : me.uid;
   try {
-    await setDoc(doc(db, "people", me.uid), { bgPhotoId: null }, { merge: true });
+    await setDoc(doc(db, "settings", "couple"), { bgPhotoId: null, bgBy: me.uid, bgAt: serverTimestamp() }, { merge: true });
+    if (myP().bgPhotoId) await setDoc(doc(db, "people", me.uid), { bgPhotoId: null }, { merge: true });
     showBg(null); try { localStorage.removeItem(BG_KEY); } catch (e) {}
-    if (old) deleteDoc(doc(db, "photos", old)).catch(() => {});
-    toast("배경 사진을 뺐어요");
+    if (old && oldBy === me.uid) deleteDoc(doc(db, "photos", old)).catch(() => {});
+    toast("배경 사진을 뺐어요. 두 분 화면에서 같이 빠져요", 3500);
   } catch (err) { toast(saveErr(err, "배경 사진을 빼지"), 6000); }
 });
 
@@ -1044,6 +1069,13 @@ function startSession(u) {
 
   // 대화 메시지 (최근 300개)
   firstMsgs = true; msgs = [];
+  // 같이 쓰는 배경 사진
+  sharedBg = { id: null, by: null, loaded: false }; bgMigrated = false;
+  unsubs.push(onSnapshot(doc(db, "settings", "couple"), (snap) => {
+    if (snap.metadata && snap.metadata.fromCache && !snap.exists()) return;   // 처음 캐시가 비어 있을 때는 기다림
+    onSharedBg(snap.exists() ? snap.data() : {});
+  }, () => {}));
+
   // 함께 하고 싶은 것
   let firstWishes = true, firstDone = true; wishes = []; wishDone = {}; wishesLoaded = false;
   unsubs.push(onSnapshot(query(collection(db, "wishes"), limit(1000)), (snap) => {
