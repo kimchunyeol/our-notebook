@@ -240,6 +240,18 @@ html.chat-open body { position: fixed; left: 0; right: 0; top: 0; width: 100%; }
 .chat-who span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-who .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
 .chat-who .dot.on { background: #2FA36B; }
+.chat-bg { display: none; }
+body.chat-bg-on .chat-bg {
+  display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: center 40% / cover no-repeat; filter: blur(3px) saturate(.9); transform: scale(1.04);
+}
+body.chat-bg-on .chat-bg::after { content: ""; position: absolute; inset: 0; background: rgba(var(--paper-rgb), .78); }
+body.chat-bg-on .chat-head, body.chat-bg-on .chat-bar, body.chat-bg-on .rec-bar, body.chat-bg-on .chat-pending { position: relative; z-index: 1; }
+body.chat-bg-on .chat-log { position: relative; z-index: 1; background: transparent; }
+body.chat-bg-on .typing { position: relative; z-index: 1; background: transparent; }
+body.chat-bg-on .chat-day { background: rgba(var(--paper-rgb), .85); }
+body.chat-bg-on .msg-side, body.chat-bg-on .msg-name { text-shadow: 0 0 4px rgba(var(--paper-rgb), .9); }
+.bg-chat-opt { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--ink-soft); margin-top: 4px; }
 .chat-log {
   flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
@@ -465,6 +477,7 @@ button.chat-photo { background: transparent; padding: 0; }
         <div>
           <b>🖼️ 첫 화면 배경</b>
           <p class="bell-p" id="bgState">공책 첫 화면 뒤에 사진을 깔아요. 소열님 화면에만 보여요.</p>
+          <label class="bg-chat-opt" id="bgChatRow" hidden><input type="checkbox" id="bgChatOn" checked> 대화창에도 연하게 깔기</label>
         </div>
         <div style="display:flex;gap:6px;flex:none">
           <button type="button" class="ghost" id="bgPick">사진 고르기</button>
@@ -515,6 +528,7 @@ button.chat-photo { background: transparent; padding: 0; }
         <button type="button" class="chat-back" id="chatBack" aria-label="공책으로 돌아가기"><span class="back-arrow" aria-hidden="true"></span>공책<span class="badge" id="backBadge" hidden></span></button>
         <div class="chat-who"><span class="dot" id="chatDot"></span><span id="chatWho">대화</span></div>
       </div>
+      <div class="chat-bg" id="chatBg" aria-hidden="true"></div>
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
       <div class="typing" id="typingRow" aria-live="polite" hidden><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="typingText"></span></div>
       <div class="pics chat-pending" id="chatPending" hidden></div>
@@ -839,8 +853,13 @@ let bgShownId = null;
 function showBg(id, data) {
   bgShownId = id || null;
   const el = $("bgPhoto");
-  if (id && data) { el.style.backgroundImage = 'url("' + data + '")'; document.body.classList.add("has-bg"); }
-  else { document.body.classList.remove("has-bg"); el.style.backgroundImage = ""; }
+  if (id && data) {
+    el.style.backgroundImage = 'url("' + data + '")'; document.body.classList.add("has-bg");
+    $("chatBg").style.backgroundImage = 'url("' + data + '")';
+  } else {
+    document.body.classList.remove("has-bg"); el.style.backgroundImage = ""; $("chatBg").style.backgroundImage = "";
+  }
+  applyChatBgPref();
 }
 function loadBgCache() {
   try { const c = JSON.parse(localStorage.getItem(BG_KEY) || "null"); if (c && c.id && c.data) showBg(c.id, c.data); } catch (e) {}
@@ -859,8 +878,16 @@ async function syncBg() {
     try { localStorage.setItem(BG_KEY, JSON.stringify({ id, data })); } catch (e) {}
   } catch (e) {}
 }
+// 대화창에도 깔지 (이 기기에서만 기억)
+function chatBgOn() { try { return localStorage.getItem("nb-bg-chat") !== "0"; } catch (e) { return true; } }
+function applyChatBgPref() { document.body.classList.toggle("chat-bg-on", document.body.classList.contains("has-bg") && chatBgOn()); }
+$("bgChatOn").addEventListener("change", () => {
+  try { localStorage.setItem("nb-bg-chat", $("bgChatOn").checked ? "1" : "0"); } catch (e) {}
+  applyChatBgPref();
+});
 function drawBgState() {
   const has = !!(me && myP().bgPhotoId);
+  $("bgChatRow").hidden = !has; $("bgChatOn").checked = chatBgOn();
   $("bgRemove").hidden = !has;
   $("bgPick").textContent = has ? "바꾸기" : "사진 고르기";
   $("bgState").textContent = has ? "첫 화면 뒤에 사진이 깔려 있어요. 이 화면은 " + nameOf(me.uid) + "님에게만 보여요." : "공책 첫 화면 뒤에 사진을 깔아요. " + (me ? nameOf(me.uid) + "님" : "내") + " 화면에만 보여요.";
