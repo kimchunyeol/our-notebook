@@ -281,6 +281,16 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
 .msg-side .one { color: #E0A92E; font-weight: 700; font-size: 0.72rem; }
 .msg-del { all: unset; cursor: pointer; font-size: 0.68rem; color: var(--ink-soft); }
 .msg-del:focus-visible { outline: 2px solid var(--pen); }
+.typing { flex: none; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--ink-soft); background: var(--paper);
+  padding: 2px max(14px, env(safe-area-inset-right, 0px)) 8px max(14px, env(safe-area-inset-left, 0px)); }
+.typing-dots { display: inline-flex; gap: 3px; background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; }
+.typing-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-soft); opacity: .45; }
+@media (prefers-reduced-motion: no-preference) {
+  .typing-dots i { animation: tdot 1.2s infinite ease-in-out; }
+  .typing-dots i:nth-child(2) { animation-delay: .15s; }
+  .typing-dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes tdot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+}
 .chat-pending { flex: none; padding: 8px max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); }
 .chat-bar {
   flex: none; display: flex; align-items: flex-end; gap: 8px; border-top: 1px solid var(--line); background: var(--sheet);
@@ -500,6 +510,7 @@ button.chat-photo { background: transparent; padding: 0; }
         <div class="chat-who"><span class="dot" id="chatDot"></span><span id="chatWho">대화</span></div>
       </div>
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">대화를 불러오는 중이에요…</div></div>
+      <div class="typing" id="typingRow" aria-live="polite" hidden><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="typingText"></span></div>
       <div class="pics chat-pending" id="chatPending" hidden></div>
       <!-- 삐삐 보내기 -->
       <div class="pager-sheet" id="pagerSheet" hidden>
@@ -910,6 +921,7 @@ function startSession(u) {
     // "처음 들어왔어요" 안내는 없앰 — 들어올 때 안내는 drawPresence에서만
     firstPeople = false;
     drawPresence();
+    drawTyping();
     if (!$("bellPanel").hidden) { drawBell(); drawBadgeState(); }
     if (!(snap.metadata && snap.metadata.fromCache)) { maybePushEnter(); refreshPushOnce(); }
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
@@ -1843,8 +1855,40 @@ function syncChatHead() {
   const oid = otherId();
   const p = oid ? people[oid] : null;
   const md = p ? todayMood(p) : null;
-  $("chatWho").textContent = p ? (p.name + (md ? " " + md.emoji : "") + (isHere(p) ? " · 지금 보고 있어요" : "")) : "대화";
+  $("chatWho").textContent = p ? (p.name + (md ? " " + md.emoji : "") + (isTyping(p) ? " · 입력 중…" : isHere(p) ? " · 지금 보고 있어요" : "")) : "대화";
   $("chatDot").classList.toggle("on", !!(p && isHere(p)));
+}
+
+// ---- 입력 중 표시 ----
+// 대화 칸에 글을 쓰는 동안 people/{uid}.typingAt 에 시각을 3초마다 남김. 6초 안에 기록이 있으면 "입력 중"
+const TYPING_EVERY = 3000, TYPING_FOR = 6500;
+const isTyping = (p) => !!(p && p.typingAt && Date.now() - tms(p.typingAt) < TYPING_FOR);
+let typingSentAt = 0, typingOn = false;
+function sendTyping(on) {
+  if (!me || isLocked()) return;
+  const now = Date.now();
+  if (on) {
+    if (typingOn && now - typingSentAt < TYPING_EVERY) return;   // 너무 자주 보내지 않게
+    typingOn = true; typingSentAt = now;
+    setDoc(doc(db, "people", me.uid), { typingAt: serverTimestamp() }, { merge: true }).catch(() => {});
+  } else if (typingOn) {
+    typingOn = false; typingSentAt = 0;
+    setDoc(doc(db, "people", me.uid), { typingAt: null }, { merge: true }).catch(() => {});
+  }
+}
+let typingTimer = null;
+function drawTyping() {
+  clearTimeout(typingTimer);
+  if (!me) return;
+  const oid = otherId(), p = oid ? people[oid] : null;
+  const on = isTyping(p);
+  const row = $("typingRow"), log = $("chatLog");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  if (on) $("typingText").textContent = p.name + "님이 입력 중이에요";
+  if (row.hidden === on) { row.hidden = !on; if (atBottom) log.scrollTop = log.scrollHeight; }
+  syncChatHead();
+  // 기록이 끊기면 몇 초 뒤 저절로 사라지게
+  if (on) typingTimer = setTimeout(drawTyping, Math.max(500, TYPING_FOR - (Date.now() - tms(p.typingAt)) + 50));
 }
 
 // 대화를 보고 있으면 "여기까지 읽음"을 기록 → 상대 화면의 숫자 1이 사라짐
@@ -1941,7 +1985,9 @@ function renderChat(forceBottom) {
 // 입력 칸: 글 길이에 맞춰 늘어남, 컴퓨터에서는 Enter로 보내기(Shift+Enter 줄바꿈)
 const chatIn = $("chatIn");
 function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
-chatIn.addEventListener("input", () => { chatIn.style.height = "auto"; chatIn.style.height = Math.min(chatIn.scrollHeight, 136) + "px"; chatCanSend(); });
+chatIn.addEventListener("input", () => { chatIn.style.height = "auto"; chatIn.style.height = Math.min(chatIn.scrollHeight, 136) + "px"; chatCanSend(); sendTyping(!!chatIn.value.trim()); });
+chatIn.addEventListener("blur", () => sendTyping(false));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendTyping(false); });
 const desktop = window.matchMedia("(pointer: fine)").matches;
 chatIn.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && desktop) { e.preventDefault(); $("chatForm").requestSubmit(); }
@@ -1998,6 +2044,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   const text = chatIn.value.trim(), photos = chatPending.slice();
   if (!text && !photos.length) return;
   chatIn.value = ""; chatIn.style.height = "auto"; chatPending = []; drawChatPending(); chatCanSend();
+  sendTyping(false);
   chatIn.focus();
   try {
     for (const src of photos) {
