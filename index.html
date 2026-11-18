@@ -183,6 +183,17 @@ button.mood { -webkit-appearance: none; appearance: none; font-family: var(--f-u
 .letter::before { content: ""; position: absolute; left: 10px; top: 16px; bottom: 16px; width: 2px; border-radius: 2px; background: var(--pen); }
 .letter.them::before { background: var(--rose); }
 .letter.unread { border-color: var(--rose); }
+/* 옆으로 밀어서 넘어갈 때 */
+@media (prefers-reduced-motion: no-preference) {
+  .slide-in-right { animation: slideR .24s ease-out; }
+  .slide-in-left { animation: slideL .24s ease-out; }
+  .chat.slide-in-right { animation: slideRChat .24s ease-out; }
+  .chat.slide-in-left { animation: slideLChat .24s ease-out; }
+  @keyframes slideR { from { transform: translateX(28px); opacity: .4; } to { transform: none; opacity: 1; } }
+  @keyframes slideL { from { transform: translateX(-28px); opacity: .4; } to { transform: none; opacity: 1; } }
+  @keyframes slideRChat { from { transform: translate(28px, var(--vvtop, 0px)); opacity: .4; } to { transform: translateY(var(--vvtop, 0px)); opacity: 1; } }
+  @keyframes slideLChat { from { transform: translate(-28px, var(--vvtop, 0px)); opacity: .4; } to { transform: translateY(var(--vvtop, 0px)); opacity: 1; } }
+}
 /* 공책 / 대화 전환 */
 /* 알림 설정 */
 .bell { gap: 12px; }
@@ -1869,6 +1880,52 @@ function setView(v) {
 }
 document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.v)));
 $("chatBack").addEventListener("click", () => { $("chatIn").blur(); setView("note"); window.scrollTo(0, 0); });
+
+// ---- 화면을 옆으로 밀어서 메뉴 바꾸기 ----
+// 왼쪽으로 밀면 다음(공책 → 대화 → 함께), 오른쪽으로 밀면 이전
+const VIEW_ORDER = ["note", "chat", "together"];
+const SWIPE_SKIP = 'input, textarea, select, .react-picker, .mood-pick, .viewer, .lock, [contenteditable="true"]';
+let swipeStart = null;
+function goView(dir) {
+  const i = VIEW_ORDER.indexOf(view), next = VIEW_ORDER[i + dir];
+  if (!next) return false;
+  if (view === "chat") $("chatIn").blur();
+  setView(next);
+  if (next !== "chat") window.scrollTo(0, 0);
+  // 들어오는 쪽에서 살짝 밀려 들어오는 느낌
+  const el = $(next === "note" ? "noteView" : next === "chat" ? "chatView" : "togetherView");
+  el.classList.remove("slide-in-left", "slide-in-right"); void el.offsetWidth;
+  el.classList.add(dir > 0 ? "slide-in-right" : "slide-in-left");
+  setTimeout(() => el.classList.remove("slide-in-left", "slide-in-right"), 260);
+  return true;
+}
+document.addEventListener("touchstart", (e) => {
+  swipeStart = null;
+  if (e.touches.length !== 1 || !me || $("app").hidden || isLocked()) return;
+  if (e.target.closest && e.target.closest(SWIPE_SKIP)) return;
+  if (!$("bellPanel").hidden && e.target.closest && e.target.closest("#bellPanel")) return;
+  const t = e.touches[0];
+  swipeStart = { x: t.clientX, y: t.clientY, at: Date.now() };
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!swipeStart) return;
+  const t = e.changedTouches[0], dx = t.clientX - swipeStart.x, dy = t.clientY - swipeStart.y, dt = Date.now() - swipeStart.at;
+  swipeStart = null;
+  // 옆으로 충분히, 위아래보다 확실히 옆으로, 너무 느리지 않게 밀었을 때만
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 700) return;
+  if (window.getSelection && String(window.getSelection())) return;   // 글자를 고르는 중이면 넘어가지 않음
+  goView(dx < 0 ? 1 : -1);
+}, { passive: true });
+document.addEventListener("touchcancel", () => { swipeStart = null; }, { passive: true });
+// 처음 한 번만 알려 주기
+setTimeout(() => {
+  try {
+    if (!localStorage.getItem("nb-swipe-hint") && me && !$("app").hidden && !isLocked() && "ontouchstart" in window) {
+      localStorage.setItem("nb-swipe-hint", "1");
+      toast("화면을 옆으로 밀면 공책 · 대화 · 함께로 넘어가요", 4500);
+    }
+  } catch (e) {}
+}, 2500);
 
 // 대화 화면 높이를 "키보드를 뺀 실제로 보이는 부분"에 맞춤 → 입력 칸이 항상 키보드 바로 위에
 let fitH = -1, fitTop = -1, fitKb = null;
