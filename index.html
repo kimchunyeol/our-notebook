@@ -928,7 +928,13 @@ function startSession(u) {
     else {
       const firstShow = $("app").hidden;
       show("app");
-      if (firstShow) setView(view); else { render(); renderChat(); }
+      if (firstShow) setView(view);
+      else {
+        render();
+        // 대화 목록에 보이는 것(이름, 읽음 표시)이 바뀐 경우에만 다시 그림
+        const key = Object.entries(people).map(([id, p]) => id + ":" + (p.name || "") + ":" + (p.chatReadAt ? tms(p.chatReadAt) : 0)).sort().join("|");
+        if (key !== lastChatKey) { lastChatKey = key; renderChat(); } else syncChatHead();
+      }
     }
   }, denied));
   heartbeat();
@@ -1826,22 +1832,30 @@ document.querySelectorAll(".views button").forEach((b) => b.addEventListener("cl
 $("chatBack").addEventListener("click", () => { $("chatIn").blur(); setView("note"); window.scrollTo(0, 0); });
 
 // 대화 화면 높이를 "키보드를 뺀 실제로 보이는 부분"에 맞춤 → 입력 칸이 항상 키보드 바로 위에
+let fitH = -1, fitTop = -1, fitKb = null;
 function fitChat() {
   const cv = $("chatView"), vv = window.visualViewport;
-  const h = vv ? vv.height : window.innerHeight;
-  cv.style.setProperty("--vvh", Math.round(h) + "px");
-  cv.style.top = (vv ? Math.max(0, vv.offsetTop) : 0) + "px";
+  const h = Math.round(vv ? vv.height : window.innerHeight);
+  const top = Math.round(vv ? Math.max(0, vv.offsetTop) : 0);
   // 키보드가 올라와 있으면 아래 안전 여백은 필요 없음
-  const kb = vv && window.innerHeight - vv.height > 120;
-  cv.style.setProperty("--kb-safe", kb ? "0px" : "env(safe-area-inset-bottom, 0px)");
+  const kb = !!(vv && window.innerHeight - vv.height > 120);
+  // 1~2px 정도 바뀐 건 무시 (계속 다시 맞추면 화면이 떨려요)
+  if (Math.abs(h - fitH) > 2) { cv.style.setProperty("--vvh", h + "px"); fitH = h; }
+  if (Math.abs(top - fitTop) > 2) { cv.style.top = top + "px"; fitTop = top; }
+  if (kb !== fitKb) { cv.style.setProperty("--kb-safe", kb ? "0px" : "env(safe-area-inset-bottom, 0px)"); fitKb = kb; }
 }
 if (window.visualViewport) {
+  let vvFrame = 0;
   const onVV = () => {
-    if (view !== "chat") return;
-    const log = $("chatLog");
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
-    fitChat();
-    if (atBottom) log.scrollTop = log.scrollHeight;
+    if (view !== "chat" || vvFrame) return;
+    vvFrame = requestAnimationFrame(() => {      // 한 화면에 한 번만
+      vvFrame = 0;
+      const log = $("chatLog");
+      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+      const before = fitH;
+      fitChat();
+      if (atBottom && before !== fitH) log.scrollTop = log.scrollHeight;
+    });
   };
   window.visualViewport.addEventListener("resize", onVV);
   window.visualViewport.addEventListener("scroll", onVV);
@@ -1859,6 +1873,7 @@ function syncChatHead() {
   $("chatDot").classList.toggle("on", !!(p && isHere(p)));
 }
 
+let lastChatKey = "";
 // ---- 입력 중 표시 ----
 // 대화 칸에 글을 쓰는 동안 people/{uid}.typingAt 에 시각을 3초마다 남김. 6초 안에 기록이 있으면 "입력 중"
 const TYPING_EVERY = 3000, TYPING_FOR = 6500;
@@ -1985,7 +2000,24 @@ function renderChat(forceBottom) {
 // 입력 칸: 글 길이에 맞춰 늘어남, 컴퓨터에서는 Enter로 보내기(Shift+Enter 줄바꿈)
 const chatIn = $("chatIn");
 function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
-chatIn.addEventListener("input", () => { chatIn.style.height = "auto"; chatIn.style.height = Math.min(chatIn.scrollHeight, 136) + "px"; chatCanSend(); sendTyping(!!chatIn.value.trim()); });
+// 입력 칸 높이 재기용 보이지 않는 복사본 (진짜 칸을 줄였다 늘리면 대화 목록이 흔들려서)
+const chatGhost = chatIn.cloneNode(false);
+chatGhost.removeAttribute("id"); chatGhost.setAttribute("aria-hidden", "true"); chatGhost.tabIndex = -1;
+Object.assign(chatGhost.style, { position: "absolute", left: "-9999px", top: "0", height: "0", minHeight: "0", visibility: "hidden", pointerEvents: "none", overflow: "hidden" });
+chatIn.after(chatGhost);   // 같은 자리(대화 입력 줄 안)에 둬야 글꼴·여백이 똑같이 적용돼요
+function growChatIn() {
+  const w = chatIn.offsetWidth; if (!w) return;
+  chatGhost.style.width = w + "px";
+  chatGhost.value = chatIn.value || "가";
+  const border = chatIn.offsetHeight - chatIn.clientHeight;
+  const want = Math.min(chatGhost.scrollHeight + border, 136);
+  if (Math.abs(chatIn.offsetHeight - want) < 2) return;          // 같은 높이면 손대지 않음
+  const log = $("chatLog");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  chatIn.style.height = want + "px";
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+chatIn.addEventListener("input", () => { growChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim()); });
 chatIn.addEventListener("blur", () => sendTyping(false));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendTyping(false); });
 const desktop = window.matchMedia("(pointer: fine)").matches;
@@ -2043,7 +2075,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   if (!me) return;
   const text = chatIn.value.trim(), photos = chatPending.slice();
   if (!text && !photos.length) return;
-  chatIn.value = ""; chatIn.style.height = "auto"; chatPending = []; drawChatPending(); chatCanSend();
+  chatIn.value = ""; chatIn.style.height = ""; chatPending = []; drawChatPending(); chatCanSend();
   sendTyping(false);
   chatIn.focus();
   try {
