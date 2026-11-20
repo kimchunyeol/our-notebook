@@ -345,6 +345,28 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
 }
 .chat-bar .primary { padding: 9px 16px; }
+/* + 버튼과 펼쳐지는 칸 */
+.chat-plus { flex: none; width: 38px; height: 38px; border-radius: 50%; padding: 0; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); display: grid; place-items: center; }
+.chat-plus span { position: relative; width: 16px; height: 16px; transition: transform .18s ease; }
+.chat-plus span::before, .chat-plus span::after { content: ""; position: absolute; background: currentColor; border-radius: 1px; }
+.chat-plus span::before { left: 7px; top: 0; width: 2px; height: 16px; }
+.chat-plus span::after { top: 7px; left: 0; width: 16px; height: 2px; }
+.chat-plus[aria-expanded="true"] { color: var(--pen); border-color: var(--pen); background: var(--pen-soft); }
+.chat-plus[aria-expanded="true"] span { transform: rotate(45deg); }
+.plus-tray {
+  flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: var(--sheet); border-top: 1px solid var(--line);
+  padding-top: 14px; padding-bottom: calc(14px + var(--kb-safe, env(safe-area-inset-bottom, 0px)));
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+}
+.chat.tray-open .chat-bar { padding-bottom: 10px; }   /* 칸이 열리면 입력 줄 아래 여백은 칸이 가져감 */
+.tray-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; background: transparent; border: 0; padding: 4px 0; font-size: 0.8rem; color: var(--ink); cursor: pointer; font-weight: 400; position: relative; }
+.tray-ico { width: 52px; height: 52px; border-radius: 18px; display: grid; place-items: center; color: #fff; }
+.tray-ico svg { width: 24px; height: 24px; }
+.tray-photo { background: #4C9A6B; }
+.tray-mic { background: #D9774B; }
+.tray-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.tray-btn:focus-within .tray-ico, .tray-btn:focus-visible .tray-ico { outline: 2px solid var(--pen); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .chat-plus span { transition: none; } }
 .chat-photo { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer; }
 button.chat-photo { background: transparent; padding: 0; }
 
@@ -549,16 +571,20 @@ button.chat-photo { background: transparent; padding: 0; }
         <button type="button" class="primary" id="recSend">보내기</button>
       </div>
       <form class="chat-bar" id="chatForm">
-        <label class="chat-photo" aria-label="사진 보내기">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg>
-          <input type="file" id="chatPhotoIn" accept="image/*" multiple>
-        </label>
-        <button type="button" class="chat-photo chat-mic" id="micBtn" aria-label="음성 메시지 녹음">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-        </button>
+        <button type="button" class="chat-plus" id="plusBtn" aria-expanded="false" aria-controls="plusTray" aria-label="사진·음성 메시지 열기"><span aria-hidden="true"></span></button>
         <textarea id="chatIn" rows="1" maxlength="1000" placeholder="메시지" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
         <button type="submit" class="primary" id="chatSend" disabled>보내기</button>
       </form>
+      <!-- + 를 누르면 아래에 펼쳐지는 칸 (카카오톡처럼) -->
+      <div class="plus-tray" id="plusTray" hidden>
+        <label class="tray-btn">
+          <span class="tray-ico tray-photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg></span><span>사진</span>
+          <input type="file" id="chatPhotoIn" accept="image/*" multiple>
+        </label>
+        <button type="button" class="tray-btn" id="micBtn">
+          <span class="tray-ico tray-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span>음성 메시지</span>
+        </button>
+      </div>
     </section>
 
     <div id="noteView" style="display:flex;flex-direction:column;gap:22px">
@@ -792,7 +818,7 @@ $("loginBox").addEventListener("submit", async (e) => {
 const LOCK_KEY = "nb-lock-cred";
 const LOCK_AFTER_MS = 0;   // 공책을 열 때마다(다른 앱에 갔다 와도) 무조건 다시 잠금
 let pickingAt = 0;         // 사진 고르기·카메라 창을 띄운 시각 (그때 잠깐 화면이 가려져도 잠그지 않음)
-document.addEventListener("click", (e) => { if (e.target && e.target.closest && e.target.closest('input[type="file"], label.photo-btn, label.chat-photo')) pickingAt = Date.now(); }, true);
+document.addEventListener("click", (e) => { if (e.target && e.target.closest && e.target.closest('input[type="file"], label.photo-btn, label.chat-photo, label.tray-btn')) pickingAt = Date.now(); }, true);
 let lockCred = null, hiddenAt = 0, unlocking = false;
 try { lockCred = localStorage.getItem(LOCK_KEY); } catch (e) {}
 const toB64u = (buf) => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
@@ -1425,6 +1451,7 @@ function pickMime() {
   return "";
 }
 function showRec(on) {
+  if (on) openTray(false);
   $("recBar").hidden = !on;
   $("chatForm").hidden = on;
 }
@@ -2126,6 +2153,19 @@ function growChatIn() {
 }
 chatIn.addEventListener("input", () => { growChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim()); });
 chatIn.addEventListener("blur", () => sendTyping(false));
+// ---- + 칸 열고 닫기 ----
+function openTray(open) {
+  $("plusTray").hidden = !open;
+  $("plusBtn").setAttribute("aria-expanded", String(open));
+  $("chatView").classList.toggle("tray-open", open);
+  $("plusBtn").setAttribute("aria-label", open ? "사진·음성 메시지 닫기" : "사진·음성 메시지 열기");
+  const log = $("chatLog");
+  if (open) { chatIn.blur(); setTimeout(() => { log.scrollTop = log.scrollHeight; }, 0); }
+}
+$("plusBtn").addEventListener("click", () => openTray($("plusTray").hidden));
+chatIn.addEventListener("focus", () => openTray(false));        // 글을 쓰려고 누르면 닫힘
+$("chatPhotoIn").addEventListener("click", () => setTimeout(() => openTray(false), 300));
+$("micBtn").addEventListener("click", () => openTray(false), true);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendTyping(false); });
 const desktop = window.matchMedia("(pointer: fine)").matches;
 chatIn.addEventListener("keydown", (e) => {
