@@ -268,6 +268,8 @@ body.chat-bg-on .msg-side, body.chat-bg-on .msg-name { text-shadow: 0 0 4px rgba
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-block: 14px; display: flex; flex-direction: column; gap: 4px; background: var(--paper);
 }
+.load-more { align-self: center; background: rgba(var(--paper-rgb), .9); border: 1px solid var(--line); color: var(--ink-soft); font-size: 0.8rem; padding: 6px 14px; margin: 4px 0 8px; }
+.chat-start { align-self: center; font-size: 0.75rem; color: var(--ink-soft); margin: 4px 0 8px; }
 .chat-day { align-self: center; font-size: 0.75rem; color: var(--ink-soft); background: var(--sheet); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
 .msg { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
 .msg.me { flex-direction: row-reverse; }
@@ -1153,7 +1155,16 @@ function startSession(u) {
     renderChat(); render();
   }, () => {}));
 
-  unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(300)), (snap) => {
+  msgLimit = MSG_PAGE; moreLoading = false;
+  subscribeMessages(u);
+  unsubs.push(() => { if (msgUnsub) { msgUnsub(); msgUnsub = null; } });
+}
+// 대화는 최근 것부터 MSG_PAGE개씩 불러옴. 위로 올리면 더 불러옴 (대화 글은 지워지지 않고 그대로 있어요)
+const MSG_PAGE = 300;
+let msgLimit = MSG_PAGE, msgUnsub = null, moreLoading = false, keepAnchor = null;
+function subscribeMessages(u) {
+  if (msgUnsub) msgUnsub();
+  msgUnsub = onSnapshot(query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(msgLimit)), (snap) => {
     msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse();
     if (!firstMsgs) {
       for (const c of snap.docChanges()) {
@@ -1165,9 +1176,9 @@ function startSession(u) {
       }
     }
     if (!(snap.metadata && snap.metadata.fromCache) && !purgeStarted) { purgeStarted = true; setTimeout(purgeOldChatPhotos, 3000); }
-    firstMsgs = false; msgsLoaded = true;
+    firstMsgs = false; msgsLoaded = true; moreLoading = false;
     renderChat(); render();
-  }, () => { msgsLoaded = true; renderChat(); }));
+  }, () => { msgsLoaded = true; moreLoading = false; renderChat(); });
 }
 
 $("nameBox").addEventListener("submit", async (e) => {
@@ -2042,6 +2053,22 @@ async function markChatRead() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") markChatRead(); });
 
+function loadOlderMsgs() {
+  if (moreLoading || !me || msgs.length < msgLimit) return;
+  const log = $("chatLog");
+  moreLoading = true;
+  keepAnchor = { h: log.scrollHeight, t: log.scrollTop };
+  msgLimit += MSG_PAGE;
+  firstMsgs = true;          // 불러온 예전 대화로 알림이 뜨지 않게
+  subscribeMessages(me);
+  renderChat();
+  keepAnchor = { h: log.scrollHeight, t: log.scrollTop };
+}
+// 맨 위까지 올리면 저절로 더 불러옴
+$("chatLog").addEventListener("scroll", () => {
+  const log = $("chatLog");
+  if (log.scrollTop < 60 && !moreLoading && msgs.length >= msgLimit) loadOlderMsgs();
+}, { passive: true });
 function renderChat(forceBottom) {
   if (!me) return;
   syncChatHead();
@@ -2052,6 +2079,15 @@ function renderChat(forceBottom) {
   if (!msgs.length) {
     log.append(el("div", "empty", msgsLoaded ? "아직 나눈 대화가 없어요. 아래에 첫 메시지를 보내 보세요." : "대화를 불러오는 중이에요…"));
     return;
+  }
+  // 맨 위: 더 예전 대화가 있으면 불러오기 버튼
+  if (msgs.length >= msgLimit) {
+    const more = el("button", "load-more", moreLoading ? "예전 대화를 불러오는 중이에요…" : "↑ 예전 대화 더 보기");
+    more.type = "button"; more.disabled = moreLoading;
+    more.onclick = loadOlderMsgs;
+    log.append(more);
+  } else if (msgsLoaded && msgs.length > 20) {
+    log.append(el("div", "chat-start", "여기가 대화의 처음이에요"));
   }
   const oid = otherId();
   const theirRead = oid && people[oid].chatReadAt ? tms(people[oid].chatReadAt) : 0;
@@ -2119,7 +2155,10 @@ function renderChat(forceBottom) {
     row.append(col, side);
     log.append(row);
   });
-  if (forceBottom || nearBottom) log.scrollTop = log.scrollHeight; else log.scrollTop = prevTop;
+  if (keepAnchor) {   // 예전 대화를 불러온 뒤에는 보던 자리 그대로
+    log.scrollTop = log.scrollHeight - keepAnchor.h + keepAnchor.t;
+    keepAnchor = null;
+  } else if (forceBottom || nearBottom) log.scrollTop = log.scrollHeight; else log.scrollTop = prevTop;
   if (view === "chat") markChatRead();
 }
 
