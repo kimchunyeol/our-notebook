@@ -450,7 +450,8 @@ button.chat-photo { background: transparent; padding: 0; }
   display: grid; place-items: center; cursor: zoom-out;
   padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
-.viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; transform-origin: center center; will-change: transform; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.viewer { touch-action: none; overscroll-behavior: contain; }
 .viewer button { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: rgba(255,255,255,.15); color: #fff; }
 </style>
 </head>
@@ -1981,7 +1982,7 @@ function fitChat() {
 if (window.visualViewport) {
   let vvFrame = 0;
   const onVV = () => {
-    if (view !== "chat" || vvFrame) return;
+    if (view !== "chat" || vvFrame || viewerOpen() || (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01)) return;
     vvFrame = requestAnimationFrame(() => {      // 한 화면에 한 번만
       vvFrame = 0;
       const log = $("chatLog");
@@ -1994,9 +1995,9 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", onVV);
   window.visualViewport.addEventListener("scroll", onVV);
 }
-window.addEventListener("resize", () => { if (view === "chat") fitChat(); });
+window.addEventListener("resize", () => { if (view === "chat" && !viewerOpen()) fitChat(); });
 window.addEventListener("scroll", () => {
-  if (view === "chat" && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+  if (view === "chat" && !viewerOpen() && !(window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
 }, { passive: true });
 $("chatIn").addEventListener("focus", () => {
   // 키보드가 다 올라온 뒤 맨 아래 대화가 보이게
@@ -2403,9 +2404,66 @@ document.querySelectorAll(".tabs button[data-f]").forEach((b) => b.addEventListe
 }));
 
 // ---- 사진 크게 보기 ----
-function openViewer(src) { $("viewerImg").src = src; $("viewer").hidden = false; }
-function closeViewer() { $("viewer").hidden = true; $("viewerImg").removeAttribute("src"); }
-$("viewer").addEventListener("click", closeViewer);
+// 두 손가락으로 벌려 확대, 한 손가락으로 이동, 두 번 톡 치면 확대/원래대로. 확대 안 한 상태에서 톡 치면 닫힘
+// (아이폰이 페이지 전체를 확대하면 대화 화면과 부딪혀 떨려서, 사진만 따로 확대해요)
+const vz = { s: 1, x: 0, y: 0 };
+let vzPinch = null, vzPan = null, vzMoved = false, vzLastTap = 0;
+const viewerOpen = () => !$("viewer").hidden;
+function vzApply() { $("viewerImg").style.transform = "translate(" + vz.x + "px," + vz.y + "px) scale(" + vz.s + ")"; }
+function vzReset() { vz.s = 1; vz.x = 0; vz.y = 0; vzApply(); }
+function vzClamp() {
+  const img = $("viewerImg"), w = img.offsetWidth * vz.s, h = img.offsetHeight * vz.s;
+  const mx = Math.max(0, (w - window.innerWidth) / 2 + 20), my = Math.max(0, (h - window.innerHeight) / 2 + 20);
+  vz.x = Math.max(-mx, Math.min(mx, vz.x)); vz.y = Math.max(-my, Math.min(my, vz.y));
+}
+function openViewer(src) { $("viewerImg").src = src; vzReset(); $("viewer").hidden = false; }
+function closeViewer() { $("viewer").hidden = true; $("viewerImg").removeAttribute("src"); vzReset(); if (view === "chat") fitChat(); }
+const tdist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+$("viewer").addEventListener("touchstart", (e) => {
+  vzMoved = false;
+  if (e.touches.length === 2) {
+    const [a, b] = e.touches;
+    vzPinch = { d: tdist(a, b), s: vz.s, x: vz.x, y: vz.y, cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
+    vzPan = null;
+  } else if (e.touches.length === 1 && vz.s > 1) {
+    vzPan = { x0: e.touches[0].clientX, y0: e.touches[0].clientY, x: vz.x, y: vz.y };
+  }
+}, { passive: false });
+$("viewer").addEventListener("touchmove", (e) => {
+  e.preventDefault();                       // 페이지 전체가 확대·이동되지 않게
+  if (vzPinch && e.touches.length === 2) {
+    const [a, b] = e.touches;
+    const s = Math.max(1, Math.min(4, vzPinch.s * tdist(a, b) / vzPinch.d));
+    const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2;
+    const ox = window.innerWidth / 2, oy = window.innerHeight / 2;
+    // 손가락 가운데를 기준으로 커지게
+    vz.x = cx - ox - (vzPinch.cx - ox - vzPinch.x) * (s / vzPinch.s);
+    vz.y = cy - oy - (vzPinch.cy - oy - vzPinch.y) * (s / vzPinch.s);
+    vz.s = s; vzClamp(); vzApply(); vzMoved = true;
+  } else if (vzPan && e.touches.length === 1) {
+    const t = e.touches[0];
+    vz.x = vzPan.x + (t.clientX - vzPan.x0); vz.y = vzPan.y + (t.clientY - vzPan.y0);
+    vzClamp(); vzApply();
+    if (Math.abs(t.clientX - vzPan.x0) + Math.abs(t.clientY - vzPan.y0) > 6) vzMoved = true;
+  }
+}, { passive: false });
+$("viewer").addEventListener("touchend", (e) => {
+  if (e.touches.length < 2) vzPinch = null;
+  if (e.touches.length === 0) { vzPan = null; if (vz.s < 1.05) vzReset(); }
+});
+$("viewer").addEventListener("click", (e) => {
+  if (e.target.id === "viewerClose") { closeViewer(); return; }
+  if (vzMoved) { vzMoved = false; return; }      // 확대·이동한 손짓은 닫기로 치지 않음
+  const now = Date.now();
+  if (now - vzLastTap < 300) {                   // 두 번 톡: 확대 ↔ 원래대로
+    vzLastTap = 0; clearTimeout(closeViewer._t);
+    if (vz.s > 1) vzReset(); else { vz.s = 2.5; vz.x = 0; vz.y = 0; vzApply(); }
+    return;
+  }
+  vzLastTap = now;
+  // 한 번 톡: 확대 안 한 상태면 잠깐 기다렸다 닫기 (두 번 톡일 수 있어서)
+  if (vz.s === 1) { clearTimeout(closeViewer._t); closeViewer._t = setTimeout(() => { if (vzLastTap === now) closeViewer(); }, 300); }
+});
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("viewer").hidden) closeViewer(); });
 
 async function fetchPhoto(id) {
