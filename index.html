@@ -345,10 +345,10 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
 .chat-bar .chat-input {
   flex: 1; min-width: 0; max-height: 8.5rem; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 18px;
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
-  white-space: pre-wrap; overflow-wrap: anywhere; outline: none; cursor: text; -webkit-user-select: text; user-select: text;
+  white-space: pre-wrap; overflow-wrap: anywhere; outline: none; cursor: text; -webkit-user-select: text; user-select: text; position: relative;
 }
 .chat-bar .chat-input:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
-.chat-input:empty::before { content: attr(data-placeholder); color: var(--ink-soft); opacity: .7; pointer-events: none; }
+.chat-input.blank::before { content: attr(data-placeholder); position: absolute; color: var(--ink-soft); opacity: .7; pointer-events: none; }
 /* 입력칸 속 젠모지·스티커는 글자 크기로 */
 .chat-input img { height: 1.4em; width: auto; max-width: 4em; vertical-align: -0.3em; display: inline; }
 /* 대화 속 젠모지·스티커: 말풍선 없이 그림만 */
@@ -585,7 +585,7 @@ button.chat-photo { background: transparent; padding: 0; }
       </div>
       <form class="chat-bar" id="chatForm">
         <button type="button" class="chat-plus" id="plusBtn" aria-expanded="false" aria-controls="plusTray" aria-label="사진·음성 메시지 열기"><span aria-hidden="true"></span></button>
-        <div id="chatIn" class="chat-input" contenteditable="true" role="textbox" aria-multiline="true" aria-label="메시지" data-placeholder="메시지" autocapitalize="sentences" spellcheck="true"></div>
+        <div id="chatIn" class="chat-input blank" contenteditable="true" role="textbox" aria-multiline="true" aria-label="메시지" data-placeholder="메시지" autocapitalize="sentences" spellcheck="true"></div>
         <button type="submit" class="primary" id="chatSend" disabled>보내기</button>
       </form>
       <!-- + 를 누르면 아래에 펼쳐지는 칸 (카카오톡처럼) -->
@@ -2205,11 +2205,24 @@ const chatHasImg = () => !!chatIn.querySelector("img");
 // 예전 코드가 그대로 쓰도록: chatIn.value 로 글만 읽고 쓰기
 Object.defineProperty(chatIn, "value", {
   get() { return chatParts().filter((p) => !p.img).map((p) => p.text).join("\n"); },
-  set(v) { chatIn.textContent = v || ""; },
+  set(v) { chatIn.textContent = v || ""; tidyChatIn(); },
 });
 // 글을 다 지웠는데 줄바꿈 찌꺼기만 남으면 비워서 "메시지" 안내가 다시 보이게
+// (아이폰에서 쓰는 중에 칸 속을 직접 비우면 커서가 사라져 한글이 안 써져서, 안내 글자만 켜고 끔)
 function tidyChatIn() {
-  if (!chatHasImg() && !chatIn.textContent.replace(/[\s​]/g, "") && chatIn.innerHTML !== "") chatIn.innerHTML = "";
+  chatIn.classList.toggle("blank", !chatHasImg() && !chatIn.textContent.replace(/[\s​]/g, ""));
+}
+// 보낸 뒤 칸 비우기: 키보드로 지우는 것과 같은 방법으로 지워야 한글 조합 중인 마지막 글자가 다시 살아나지 않아요
+function clearChatIn() {
+  if (document.activeElement === chatIn) {
+    try {
+      const r = document.createRange(); r.selectNodeContents(chatIn);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      document.execCommand("delete");
+    } catch (e) {}
+  }
+  if (chatIn.textContent.replace(/\s/g, "") || chatHasImg()) chatIn.innerHTML = "";
+  tidyChatIn();
 }
 // 붙여 넣거나 끌어 넣은 글의 글꼴·색 같은 꾸밈은 없애고 글과 그림만 남김
 const KEEP_TAGS = /^(IMG|PICTURE|SOURCE|BR|DIV|P|SPAN)$/;
@@ -2229,17 +2242,17 @@ chatIn.addEventListener("paste", (e) => {
     e.preventDefault();
     files.slice(0, 4).forEach((f) => {
       const r = new FileReader();
-      r.onload = () => { const img = document.createElement("img"); img.src = r.result; img.alt = "그림"; insertAtCaret(img); chatCanSend(); };
+      r.onload = () => { const img = document.createElement("img"); img.src = r.result; img.alt = "그림"; insertAtCaret(img); tidyChatIn(); chatCanSend(); };
       r.readAsDataURL(f);
     });
     return;
   }
-  if (/<img/i.test(html)) { setTimeout(() => { cleanChatIn(); chatCanSend(); }, 0); return; }   // 그림이 섞인 붙여넣기는 그대로 두고 꾸밈만 정리
+  if (/<img/i.test(html)) { setTimeout(() => { cleanChatIn(); tidyChatIn(); chatCanSend(); }, 0); return; }   // 그림이 섞인 붙여넣기는 그대로 두고 꾸밈만 정리
   e.preventDefault();
   const t = cd.getData("text/plain") || "";
   if (!document.execCommand("insertText", false, t)) insertAtCaret(document.createTextNode(t));
 });
-chatIn.addEventListener("drop", () => setTimeout(() => { cleanChatIn(); chatCanSend(); }, 0));
+chatIn.addEventListener("drop", () => setTimeout(() => { cleanChatIn(); tidyChatIn(); chatCanSend(); }, 0));
 function insertAtCaret(node) {
   const sel = window.getSelection();
   let r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
@@ -2256,7 +2269,12 @@ if (window.ResizeObserver) new ResizeObserver(() => {
   if (grew || log.scrollHeight - log.scrollTop - log.clientHeight < 160) log.scrollTop = log.scrollHeight;
 }).observe(chatIn);
 chatIn.addEventListener("input", (e) => {
-  if (e.inputType && /Paste|Drop|Replacement/.test(e.inputType)) cleanChatIn();
+  // 보낸 직후 키보드가 방금 보낸 마지막 글자를 다시 넣으면 지움
+  if (lastSent && Date.now() - lastSent.at < 1000 && !chatHasImg()) {
+    const v = chatIn.value.trim();
+    if (v && v.length <= 2 && lastSent.text.endsWith(v)) { lastSent = null; setTimeout(() => { clearChatIn(); chatCanSend(); }, 0); return; }
+  }
+  if (e.inputType && /Paste|Drop/.test(e.inputType)) cleanChatIn();
   tidyChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim() || chatHasImg());
 });
 chatIn.addEventListener("blur", () => sendTyping(false));
@@ -2350,9 +2368,15 @@ async function stickerFrom(img) {
   } catch (e) { return null; }
 }
 let chatSending = false;
+// 한글 조합 중인지 (조합 중에 보내면 마지막 글자가 칸에 남는 문제 막기)
+let chatComposing = false, lastSent = null;
+chatIn.addEventListener("compositionstart", () => { chatComposing = true; });
+chatIn.addEventListener("compositionend", () => { chatComposing = false; });
 $("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!me || chatSending) return;
+  // 조합 중인 글자를 먼저 확정 (칸에서 잠깐 빠졌다가 바로 돌아와요)
+  if (chatComposing && document.activeElement === chatIn) { chatIn.blur(); chatComposing = false; chatIn.focus(); }
   const parts = chatParts(), photos = chatPending.slice();
   if (!parts.length && !photos.length) return;
   chatSending = true;
@@ -2369,7 +2393,8 @@ $("chatForm").addEventListener("submit", async (e) => {
   const stickers = items.filter((x) => x.sticker);
   if (bad) toast("그림 " + bad + "개는 보낼 수 없어서 뺐어요.");
   if (!items.length && !photos.length) return;
-  chatIn.innerHTML = ""; chatIn.scrollTop = 0; chatPending = []; drawChatPending(); chatCanSend();
+  clearChatIn(); chatIn.scrollTop = 0;
+  lastSent = { text, at: Date.now() }; chatPending = []; drawChatPending(); chatCanSend();
   sendTyping(false);
   chatIn.focus();
   try {
