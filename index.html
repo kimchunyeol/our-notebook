@@ -342,10 +342,20 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 .chat-log > .empty { margin: auto 0; }
-.chat-bar textarea {
-  flex: 1; min-width: 0; resize: none; max-height: 8.5rem; overflow-y: hidden; transition: none; border: 1px solid var(--line); border-radius: 18px;
+.chat-bar .chat-input {
+  flex: 1; min-width: 0; max-height: 8.5rem; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 18px;
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
+  white-space: pre-wrap; overflow-wrap: anywhere; outline: none; cursor: text; -webkit-user-select: text; user-select: text;
 }
+.chat-bar .chat-input:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+.chat-input:empty::before { content: attr(data-placeholder); color: var(--ink-soft); opacity: .7; pointer-events: none; }
+/* 입력칸 속 젠모지·스티커는 글자 크기로 */
+.chat-input img { height: 1.4em; width: auto; max-width: 4em; vertical-align: -0.3em; display: inline; }
+/* 대화 속 젠모지·스티커: 말풍선 없이 그림만 */
+.bubble.sticker, .msg.me .bubble.sticker { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.bubble.sticker .pic { width: 112px; height: 112px; aspect-ratio: auto; background: transparent; border-radius: 0; cursor: default; }
+.bubble.sticker .pic img { object-fit: contain; }
+.bubble.sticker .pic.loading::after { content: ""; }
 .chat-bar .primary { padding: 9px 16px; }
 /* + 버튼과 펼쳐지는 칸 */
 .chat-plus { flex: none; width: 38px; height: 38px; border-radius: 50%; padding: 0; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); display: grid; place-items: center; }
@@ -575,7 +585,7 @@ button.chat-photo { background: transparent; padding: 0; }
       </div>
       <form class="chat-bar" id="chatForm">
         <button type="button" class="chat-plus" id="plusBtn" aria-expanded="false" aria-controls="plusTray" aria-label="사진·음성 메시지 열기"><span aria-hidden="true"></span></button>
-        <textarea id="chatIn" rows="1" maxlength="1000" placeholder="메시지" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"></textarea>
+        <div id="chatIn" class="chat-input" contenteditable="true" role="textbox" aria-multiline="true" aria-label="메시지" data-placeholder="메시지" autocapitalize="sentences" spellcheck="true"></div>
         <button type="submit" class="primary" id="chatSend" disabled>보내기</button>
       </form>
       <!-- + 를 누르면 아래에 펼쳐지는 칸 (카카오톡처럼) -->
@@ -1172,7 +1182,7 @@ function subscribeMessages(u) {
         const m = c.doc.data();
         if (c.type === "added" && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
             && (view !== "chat" || document.visibilityState !== "visible")) {
-          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
+          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.stickerId ? "젠모지를 보냈어요" : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
         }
       }
     }
@@ -2111,6 +2121,10 @@ function renderChat(forceBottom) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
+    } else if (m.stickerId) {
+      bubble = el("div", "bubble sticker");
+      const b = el("div", "pic stk"); b.dataset.pid = m.stickerId; if (m.alt) b.dataset.alt = m.alt;
+      bubble.append(b); fillPic(b); fetchPhoto(m.stickerId);
     } else if (m.voiceId) {
       bubble = voiceBubble(m);
     } else if (m.beep) {
@@ -2129,7 +2143,7 @@ function renderChat(forceBottom) {
     col.append(bubble);
     // 길게 누르면 반응 고르기 (글 메시지는 복사도)
     const anchor = bubble;
-    onLongPress(bubble, () => openPicker(anchor, m.id, "chat", (m.photoId || m.voiceId) ? null : (m.beep || m.text || "")));
+    onLongPress(bubble, () => openPicker(anchor, m.id, "chat", (m.photoId || m.voiceId || m.stickerId) ? null : (m.beep || m.text || "")));
     const rr = reactRow(m.id, "chat"); if (rr.childNodes.length) col.append(rr);
     if (m.photoId && !bubble.classList.contains("expired")) {
       const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
@@ -2138,9 +2152,9 @@ function renderChat(forceBottom) {
     const side = el("div", "msg-side");
     if (mine && !(theirRead && t <= theirRead)) side.append(el("span", "one", "1"));
     if (last) side.append(el("span", null, fmtTime(t)));
-    if (mine && (pickedMsg === m.id || m.photoId || m.voiceId)) {
+    if (mine && (pickedMsg === m.id || m.photoId || m.voiceId || m.stickerId)) {
       const del = el("button", "msg-del", "지우기"); del.type = "button";
-      if ((m.photoId || m.voiceId) && pickedMsg !== m.id) { del.textContent = "⋯"; del.setAttribute("aria-label", m.voiceId ? "음성 메시지 메뉴" : "사진 메뉴"); del.onclick = () => { pickedMsg = m.id; renderChat(); }; }
+      if ((m.photoId || m.voiceId || m.stickerId) && pickedMsg !== m.id) { del.textContent = "⋯"; del.setAttribute("aria-label", m.voiceId ? "음성 메시지 메뉴" : m.stickerId ? "젠모지 메뉴" : "사진 메뉴"); del.onclick = () => { pickedMsg = m.id; renderChat(); }; }
       else del.onclick = async () => {
         pickedMsg = null;
         if (m.voiceId && playingId === m.voiceId) stopVoice();
@@ -2148,6 +2162,7 @@ function renderChat(forceBottom) {
           await deleteDoc(doc(db, "messages", m.id));
           if (m.photoId) { try { await deleteDoc(doc(db, "photos", m.photoId)); } catch (e) {} }
           if (m.voiceId) { try { await deleteDoc(doc(db, "voices", m.voiceId)); } catch (e) {} }
+          if (m.stickerId) { try { await deleteDoc(doc(db, "photos", m.stickerId)); } catch (e) {} }
         }
         catch (e) { toast("지우지 못했어요."); }
       };
@@ -2165,33 +2180,85 @@ function renderChat(forceBottom) {
 
 // 입력 칸: 글 길이에 맞춰 늘어남, 컴퓨터에서는 Enter로 보내기(Shift+Enter 줄바꿈)
 const chatIn = $("chatIn");
-function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
-// 입력 칸 높이 재기용 보이지 않는 복사본 (진짜 칸을 줄였다 늘리면 대화 목록이 흔들려서)
-const chatGhost = chatIn.cloneNode(false);
-chatGhost.removeAttribute("id"); chatGhost.setAttribute("aria-hidden", "true"); chatGhost.tabIndex = -1;
-Object.assign(chatGhost.style, { position: "absolute", left: "-9999px", top: "0", height: "0", minHeight: "0", visibility: "hidden", pointerEvents: "none", overflow: "hidden" });
-chatIn.after(chatGhost);   // 같은 자리(대화 입력 줄 안)에 둬야 글꼴·여백이 똑같이 적용돼요
-const CHAT_IN_MAX = 136;
-function growChatIn() {
-  const w = chatIn.offsetWidth; if (!w) return;
-  chatGhost.style.width = w + "px";
-  // 글자 두 개를 더 넣어 재요 → 줄이 넘어가기 "직전"에 미리 칸을 늘려서, 넘어가는 순간 글이 위로 밀리지 않게
-  chatGhost.value = chatIn.value + "가가";
-  const border = chatIn.offsetHeight - chatIn.clientHeight;
-  const want = Math.min(chatGhost.scrollHeight + border, CHAT_IN_MAX);
-  const atMax = want >= CHAT_IN_MAX;
-  // 다 커지기 전에는 칸 안에서 글이 위아래로 움직이지 않게
-  const ov = atMax ? "auto" : "hidden";
-  if (chatIn.style.overflowY !== ov) chatIn.style.overflowY = ov;
-  if (!atMax && chatIn.scrollTop) chatIn.scrollTop = 0;
-  if (Math.abs(chatIn.offsetHeight - want) < 2) return;          // 같은 높이면 손대지 않음
-  const log = $("chatLog");
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
-  chatIn.style.height = want + "px";
-  if (!atMax) chatIn.scrollTop = 0;
-  if (atBottom) log.scrollTop = log.scrollHeight;
+function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && !chatIn.querySelector("img") && chatPending.length === 0; }
+// 입력칸은 글과 그림(젠모지·스티커)을 함께 받는 칸이에요.
+// 칸 안의 내용을 순서대로 [글, 그림, 글 …] 조각으로 나눔
+function chatParts() {
+  const parts = []; let buf = "";
+  const walk = (n) => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === 3) buf += c.data;
+      else if (c.nodeName === "BR") buf += "\n";
+      else if (c.nodeName === "IMG") { parts.push({ text: buf }); buf = ""; parts.push({ img: c }); }
+      else if (c.nodeType === 1) {
+        const block = /^(DIV|P|LI)$/.test(c.nodeName);
+        if (block && buf && !buf.endsWith("\n")) buf += "\n";
+        walk(c);
+        if (block && buf && !buf.endsWith("\n")) buf += "\n";
+      }
+    }
+  };
+  walk(chatIn); parts.push({ text: buf });
+  return parts.map((p) => p.img ? p : { text: p.text.replace(/ /g, " ").trim() }).filter((p) => p.img || p.text);
 }
-chatIn.addEventListener("input", () => { growChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim()); });
+const chatHasImg = () => !!chatIn.querySelector("img");
+// 예전 코드가 그대로 쓰도록: chatIn.value 로 글만 읽고 쓰기
+Object.defineProperty(chatIn, "value", {
+  get() { return chatParts().filter((p) => !p.img).map((p) => p.text).join("\n"); },
+  set(v) { chatIn.textContent = v || ""; },
+});
+// 글을 다 지웠는데 줄바꿈 찌꺼기만 남으면 비워서 "메시지" 안내가 다시 보이게
+function tidyChatIn() {
+  if (!chatHasImg() && !chatIn.textContent.replace(/[\s​]/g, "") && chatIn.innerHTML !== "") chatIn.innerHTML = "";
+}
+// 붙여 넣거나 끌어 넣은 글의 글꼴·색 같은 꾸밈은 없애고 글과 그림만 남김
+const KEEP_TAGS = /^(IMG|PICTURE|SOURCE|BR|DIV|P|SPAN)$/;
+function cleanChatIn() {
+  for (const e of [...chatIn.querySelectorAll("*")]) {
+    if (!KEEP_TAGS.test(e.nodeName)) { e.replaceWith(...e.childNodes); continue; }
+    if (e.nodeName === "SPAN") { e.replaceWith(...e.childNodes); continue; }
+    for (const a of [...e.attributes]) if (!/^(src|srcset|alt|type)$/.test(a.name)) e.removeAttribute(a.name);
+    if (e.nodeName === "IMG" && !e.getAttribute("src") && !e.getAttribute("srcset")) e.remove();
+  }
+}
+chatIn.addEventListener("paste", (e) => {
+  const cd = e.clipboardData; if (!cd) return;
+  const html = cd.getData("text/html") || "";
+  const files = [...(cd.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) {               // 그림 파일을 붙여 넣으면 입력칸에 그림으로
+    e.preventDefault();
+    files.slice(0, 4).forEach((f) => {
+      const r = new FileReader();
+      r.onload = () => { const img = document.createElement("img"); img.src = r.result; img.alt = "그림"; insertAtCaret(img); chatCanSend(); };
+      r.readAsDataURL(f);
+    });
+    return;
+  }
+  if (/<img/i.test(html)) { setTimeout(() => { cleanChatIn(); chatCanSend(); }, 0); return; }   // 그림이 섞인 붙여넣기는 그대로 두고 꾸밈만 정리
+  e.preventDefault();
+  const t = cd.getData("text/plain") || "";
+  if (!document.execCommand("insertText", false, t)) insertAtCaret(document.createTextNode(t));
+});
+chatIn.addEventListener("drop", () => setTimeout(() => { cleanChatIn(); chatCanSend(); }, 0));
+function insertAtCaret(node) {
+  const sel = window.getSelection();
+  let r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+  if (!r || !chatIn.contains(r.commonAncestorContainer)) { r = document.createRange(); r.selectNodeContents(chatIn); r.collapse(false); }
+  r.deleteContents(); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
+  sel.removeAllRanges(); sel.addRange(r);
+}
+// 칸이 커지거나 작아지면 대화 맨 아래가 계속 보이게 (그림 그리기 전에 맞춰서 흔들림 없이)
+let chatInH = 0;
+if (window.ResizeObserver) new ResizeObserver(() => {
+  const h = chatIn.offsetHeight; if (!h || Math.abs(h - chatInH) < 1) return;
+  const log = $("chatLog");
+  const grew = h > chatInH; chatInH = h;
+  if (grew || log.scrollHeight - log.scrollTop - log.clientHeight < 160) log.scrollTop = log.scrollHeight;
+}).observe(chatIn);
+chatIn.addEventListener("input", (e) => {
+  if (e.inputType && /Paste|Drop|Replacement/.test(e.inputType)) cleanChatIn();
+  tidyChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim() || chatHasImg());
+});
 chatIn.addEventListener("blur", () => sendTyping(false));
 // ---- + 칸 열고 닫기 ----
 function openTray(open) {
@@ -2257,12 +2324,52 @@ function drawChatPending() {
     d.append(img, x); box.append(d);
   });
 }
+// 입력칸 속 그림(젠모지)을 작은 PNG 그림으로 바꿈 (배경은 투명하게 남겨요)
+const STICKER_PX = 200;
+async function stickerFrom(img) {
+  const src = img.currentSrc || img.src;
+  const draw = (pic, w, h) => {
+    const k = Math.min(1, STICKER_PX / Math.max(w, h, 1));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext("2d").drawImage(pic, 0, 0, c.width, c.height);
+    return c.toDataURL("image/png");
+  };
+  try {
+    if (!img.complete || !img.naturalWidth) await img.decode();
+    if (img.naturalWidth) return draw(img, img.naturalWidth, img.naturalHeight);
+  } catch (e) {}
+  if (!src) return null;
+  try {
+    const im = new Image(); im.src = src; await im.decode();
+    return draw(im, im.naturalWidth, im.naturalHeight);
+  } catch (e) {}
+  try {
+    const bmp = await createImageBitmap(await (await fetch(src)).blob());
+    return draw(bmp, bmp.width, bmp.height);
+  } catch (e) { return null; }
+}
+let chatSending = false;
 $("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!me) return;
-  const text = chatIn.value.trim(), photos = chatPending.slice();
-  if (!text && !photos.length) return;
-  chatIn.value = ""; chatIn.style.height = ""; chatIn.style.overflowY = ""; chatIn.scrollTop = 0; chatPending = []; drawChatPending(); chatCanSend();
+  if (!me || chatSending) return;
+  const parts = chatParts(), photos = chatPending.slice();
+  if (!parts.length && !photos.length) return;
+  chatSending = true;
+  // 보내기 전에 그림을 먼저 준비 (글·그림 순서 그대로)
+  const items = [];
+  let bad = 0;
+  for (const p of parts) {
+    if (!p.img) { for (let i = 0; i < p.text.length; i += 1000) items.push({ text: p.text.slice(i, i + 1000) }); continue; }
+    const data = await stickerFrom(p.img);
+    if (data) items.push({ sticker: data, alt: (p.img.getAttribute("alt") || "").slice(0, 60) }); else bad++;
+  }
+  chatSending = false;
+  const text = items.filter((x) => x.text).map((x) => x.text).join("\n");
+  const stickers = items.filter((x) => x.sticker);
+  if (bad) toast("그림 " + bad + "개는 보낼 수 없어서 뺐어요.");
+  if (!items.length && !photos.length) return;
+  chatIn.innerHTML = ""; chatIn.scrollTop = 0; chatPending = []; drawChatPending(); chatCanSend();
   sendTyping(false);
   chatIn.focus();
   try {
@@ -2272,9 +2379,17 @@ $("chatForm").addEventListener("submit", async (e) => {
       photoCache[ref.id] = src;
       await addDoc(collection(db, "messages"), { author: me.uid, photoId: ref.id, createdAt: serverTimestamp() });
     }
-    if (text) await addDoc(collection(db, "messages"), { author: me.uid, text, createdAt: serverTimestamp() });
+    for (const it of items) {
+      if (it.text) { await addDoc(collection(db, "messages"), { author: me.uid, text: it.text, createdAt: serverTimestamp() }); continue; }
+      // 젠모지·스티커는 지우지 않고 계속 남겨요 (작은 그림이라 용량이 거의 안 들어요)
+      const ref = await addDoc(collection(db, "photos"), { author: me.uid, data: it.sticker, kind: "sticker", createdAt: serverTimestamp() });
+      photoCache[ref.id] = it.sticker;
+      const msg = { author: me.uid, stickerId: ref.id, createdAt: serverTimestamp() };
+      if (it.alt) msg.alt = it.alt;
+      await addDoc(collection(db, "messages"), msg);
+    }
     renderChat(true);
-    pushOther("msg", text ? text : "사진을 보냈어요");
+    pushOther("msg", text ? text : stickers.length ? "젠모지를 보냈어요" : "사진을 보냈어요");
   } catch (err) {
     if (text && !chatIn.value) chatIn.value = text;
     chatCanSend();
@@ -2477,6 +2592,12 @@ async function fetchPhoto(id) {
 }
 function fillPic(btn) {
   const src = photoCache[btn.dataset.pid];
+  if (btn.classList.contains("stk")) {       // 젠모지·스티커: 크게 보기 없이 그림만
+    btn.classList.toggle("loading", src == null);
+    if (src) { let img = btn.querySelector("img"); if (!img) { img = el("img"); img.alt = btn.dataset.alt || "젠모지"; btn.append(img); } img.src = src; }
+    else if (src === "") btn.replaceWith(el("span", "msg-expire", "지워진 그림이에요"));
+    return;
+  }
   if (src) {
     btn.classList.remove("loading");
     let img = btn.querySelector("img");
