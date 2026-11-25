@@ -680,7 +680,7 @@ const firebaseConfig = {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, indexedDBLocalPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, getDocs, onSnapshot, query, where, orderBy, limit, serverTimestamp }
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc, getDocFromServer, getDocs, onSnapshot, query, where, orderBy, limit, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -907,7 +907,8 @@ function loadBgCache() {
 // 두 사람이 같이 쓰는 배경: settings/couple 문서의 bgPhotoId (누가 바꿔도 둘 다 바뀜)
 // 예전에 각자 넣어 둔 배경(people.bgPhotoId)은 같이 쓰는 배경으로 한 번 옮겨 줌
 let sharedBg = { id: null, by: null, loaded: false };
-const bgIdNow = () => sharedBg.id || (me && myP().bgPhotoId) || null;
+// 같이 쓰는 배경을 받아 온 뒤에는 그것만 따름 (각자 예전 배경이 남아 있어도 무시)
+const bgIdNow = () => sharedBg.loaded ? sharedBg.id : (sharedBg.id || (me && myP().bgPhotoId) || null);
 async function syncBg() {
   if (!me) return;
   maybeMigrateBg();
@@ -924,6 +925,16 @@ async function syncBg() {
   } catch (e) {}
 }
 let bgMigrated = false;
+// 공책을 다시 볼 때마다 서버에서 배경을 한 번 더 확인 (아이폰이 잠깐 끊겼다 와도 바로 맞춰지게)
+let bgCheckedAt = 0;
+async function refreshSharedBg() {
+  if (!me || Date.now() - bgCheckedAt < 4000) return;
+  bgCheckedAt = Date.now();
+  try { const snap = await getDocFromServer(doc(db, "settings", "couple")); onSharedBg(snap.exists() ? snap.data() : {}); } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshSharedBg(); });
+window.addEventListener("pageshow", () => refreshSharedBg());
+window.addEventListener("online", () => { bgCheckedAt = 0; refreshSharedBg(); });
 function onSharedBg(d) {
   const prev = sharedBg.id;
   sharedBg = { id: d.bgPhotoId || null, by: d.bgBy || null, loaded: true };
