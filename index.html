@@ -148,6 +148,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .where-map iframe { width: 100%; height: 100%; border: 0; display: block; }
 .where-links { display: flex; gap: 8px; flex-wrap: wrap; }
 .where-links a { flex: 1; text-align: center; padding: 8px 10px; border-radius: 10px; background: var(--pen-soft); color: var(--pen); text-decoration: none; font-size: 0.88rem; }
+.bubble.loc-card { display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; cursor: pointer; padding: 10px 14px; }
+.loc-ico { font-size: 1.5rem; line-height: 1; }
+.loc-txt { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; }
+.loc-txt b { font-size: 0.95rem; font-weight: 600; }
+.loc-go { font-size: 0.8rem; opacity: .8; }
 .where-sub { font-size: 0.82rem; color: var(--ink-soft); }
 .where-me { margin: 0; font-size: 0.8rem; color: var(--ink-soft); line-height: 1.5; }
 .wish-progress { margin: 0 2px; font-size: 0.88rem; color: var(--ink-soft); }
@@ -1115,7 +1120,7 @@ function startSession(u) {
       else {
         render();
         // 대화 목록에 보이는 것(이름, 읽음 표시)이 바뀐 경우에만 다시 그림
-        const key = Object.entries(people).map(([id, p]) => id + ":" + (p.name || "") + ":" + (p.chatReadAt ? tms(p.chatReadAt) : 0)).sort().join("|");
+        const key = Object.entries(people).map(([id, p]) => id + ":" + (p.name || "") + ":" + (p.chatReadAt ? tms(p.chatReadAt) : 0) + ":" + (p.locOn ? 1 : 0) + ":" + ((p.loc && p.loc.place) || "") + ":" + (p.loc && p.loc.at ? Math.floor(tms(p.loc.at) / 600000) : 0)).sort().join("|");
         if (key !== lastChatKey) { lastChatKey = key; renderChat(); } else syncChatHead();
       }
     }
@@ -1211,7 +1216,7 @@ function subscribeMessages(u) {
         const m = c.doc.data();
         if (c.type === "added" && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
             && (view !== "chat" || document.visibilityState !== "visible")) {
-          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
+          alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.loc ? "📍 위치 보내기를 " + (m.loc === "on" ? "켰어요" : "껐어요") : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
         }
       }
     }
@@ -2150,6 +2155,8 @@ function renderChat(forceBottom) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
+    } else if (m.loc) {
+      bubble = locBubble(m);
     } else if (m.voiceId) {
       bubble = voiceBubble(m);
     } else if (m.beep) {
@@ -2168,7 +2175,7 @@ function renderChat(forceBottom) {
     col.append(bubble);
     // 길게 누르면 반응 고르기 (글 메시지는 복사도)
     const anchor = bubble;
-    onLongPress(bubble, () => openPicker(anchor, m.id, "chat", (m.photoId || m.voiceId) ? null : (m.beep || m.text || "")));
+    onLongPress(bubble, () => openPicker(anchor, m.id, "chat", (m.photoId || m.voiceId || m.loc) ? null : (m.beep || m.text || "")));
     const rr = reactRow(m.id, "chat"); if (rr.childNodes.length) col.append(rr);
     if (m.photoId && !bubble.classList.contains("expired")) {
       const left = Math.ceil((tms(m.createdAt) + CHAT_PHOTO_DAYS * DAY_MS - Date.now()) / DAY_MS);
@@ -2177,9 +2184,9 @@ function renderChat(forceBottom) {
     const side = el("div", "msg-side");
     if (mine && !(theirRead && t <= theirRead)) side.append(el("span", "one", "1"));
     if (last) side.append(el("span", null, fmtTime(t)));
-    if (mine && (pickedMsg === m.id || m.photoId || m.voiceId)) {
+    if (mine && (pickedMsg === m.id || m.photoId || m.voiceId || m.loc)) {
       const del = el("button", "msg-del", "지우기"); del.type = "button";
-      if ((m.photoId || m.voiceId) && pickedMsg !== m.id) { del.textContent = "⋯"; del.setAttribute("aria-label", m.voiceId ? "음성 메시지 메뉴" : "사진 메뉴"); del.onclick = () => { pickedMsg = m.id; renderChat(); }; }
+      if ((m.photoId || m.voiceId || m.loc) && pickedMsg !== m.id) { del.textContent = "⋯"; del.setAttribute("aria-label", m.voiceId ? "음성 메시지 메뉴" : m.loc ? "위치 카드 메뉴" : "사진 메뉴"); del.onclick = () => { pickedMsg = m.id; renderChat(); }; }
       else del.onclick = async () => {
         pickedMsg = null;
         if (m.voiceId && playingId === m.voiceId) stopVoice();
@@ -2631,13 +2638,36 @@ $("locOn").addEventListener("change", async () => {
     if (!navigator.geolocation) { $("locOn").checked = false; toast("이 기기에서는 위치를 쓸 수 없어요."); return; }
     toast("위치 사용을 물어보면 '허용'을 눌러 주세요", 3500);
     locTick(true);
+    postLocMsg("on");
   } else {
     stopLocWatch(); locLastSent = null;
-    try { await setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }); toast("내 위치 보내기를 껐어요. 보냈던 위치도 지웠어요", 3500); }
+    try { await setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }); toast("내 위치 보내기를 껐어요. 보냈던 위치도 지웠어요", 3500); postLocMsg("off"); }
     catch (e) { toast(saveErr(e, "위치를 지우지"), 5000); }
   }
   drawWhere();
 });
+// 켜고 끈 것을 대화창에도 카드로 남김
+async function postLocMsg(state) {
+  if (!me) return;
+  try {
+    await addDoc(collection(db, "messages"), { author: me.uid, loc: state, createdAt: serverTimestamp() });
+    pushOther("msg", state === "on" ? "📍 내 위치 보내기를 켰어요" : "📍 내 위치 보내기를 껐어요");
+  } catch (e) {}
+}
+// 대화 속 위치 카드: 그 사람이 지금 보내는 위치를 실시간으로 보여 줌
+function locBubble(m) {
+  const p = people[m.author] || {};
+  const live = m.loc === "on" && p.locOn && p.loc && p.loc.lat != null ? p.loc : null;
+  const b = el("button", "bubble loc-card"); b.type = "button";
+  b.append(el("span", "loc-ico", "📍"));
+  const txt = el("span", "loc-txt");
+  txt.append(el("b", null, m.loc === "on" ? "위치 보내기를 켰어요" : "위치 보내기를 껐어요"));
+  if (m.loc === "on") txt.append(el("span", null, live ? (live.place || "위치 보는 중") + (live.at ? " · " + ago(tms(live.at)) : "") : "지금은 꺼져 있어요"));
+  if (live) txt.append(el("span", "loc-go", "지도 보기 ›"));
+  b.append(txt);
+  b.onclick = () => { setView("together"); window.scrollTo(0, 0); };
+  return b;
+}
 let whereMapKey = "";
 function drawWhere() {
   if (!me) return;
