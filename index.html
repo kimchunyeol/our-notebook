@@ -138,6 +138,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .photo-btn:fo
 .wish-cats button[aria-pressed="true"] { background: var(--pen-soft); color: var(--pen); border-color: transparent; }
 .wish-row { display: flex; gap: 8px; }
 .wish-row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 9px 14px; font-family: var(--f-ui); font-size: 1rem; }
+.where-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.where-head h3 { margin: 0; font-size: 1rem; }
+.where-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
+.where-switch input { width: 18px; height: 18px; accent-color: var(--pen); margin: 0; }
+.where-them { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.where-them b { color: var(--pen); font-weight: 600; }
+.where-map { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); height: 200px; background: var(--paper); }
+.where-map iframe { width: 100%; height: 100%; border: 0; display: block; }
+.where-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.where-links a { flex: 1; text-align: center; padding: 8px 10px; border-radius: 10px; background: var(--pen-soft); color: var(--pen); text-decoration: none; font-size: 0.88rem; }
+.where-sub { font-size: 0.82rem; color: var(--ink-soft); }
+.where-me { margin: 0; font-size: 0.8rem; color: var(--ink-soft); line-height: 1.5; }
 .wish-progress { margin: 0 2px; font-size: 0.88rem; color: var(--ink-soft); }
 .wish-progress:empty { display: none; }
 .wish-list { display: flex; flex-direction: column; gap: 14px; }
@@ -625,6 +637,20 @@ button.chat-photo { background: transparent; padding: 0; }
 
     <!-- 함께 하고 싶은 것 -->
     <div id="togetherView" class="together" hidden>
+      <!-- 서로 어디쯤: 각자 "내 위치 보내기"를 켠 사람의 위치만 상대에게 보여요 -->
+      <section class="card where" id="whereCard" aria-label="서로 어디쯤">
+        <div class="where-head">
+          <h3>📍 서로 어디쯤</h3>
+          <label class="where-switch"><input type="checkbox" id="locOn"><span>내 위치 보내기</span></label>
+        </div>
+        <p class="where-them" id="whereThem">불러오는 중이에요…</p>
+        <div class="where-map" id="whereMap" hidden></div>
+        <div class="where-links" id="whereLinks" hidden>
+          <a id="whereKakao" target="_blank" rel="noopener">카카오맵으로 보기</a>
+          <a id="whereApple" target="_blank" rel="noopener">애플 지도로 보기</a>
+        </div>
+        <p class="where-me" id="whereMe"></p>
+      </section>
       <form class="card wish-add" id="wishForm">
         <div class="wish-cats" role="group" aria-label="종류">
           <button type="button" data-c="place" aria-pressed="true">📍 가고 싶은 곳</button>
@@ -847,6 +873,7 @@ function unlockDone() {
     if (heartbeat.write && document.visibilityState === "visible") heartbeat.write(true);
     maybePushEnter();
   }
+  setTimeout(() => locTick(true), 300);
 }
 async function unlock() {
   if (unlocking || $("lockScreen").hidden) return;
@@ -1077,13 +1104,14 @@ function startSession(u) {
     drawPresence();
     drawTyping();
     syncBg();
+    drawWhere();
     if (!$("bellPanel").hidden) { drawBell(); drawBadgeState(); }
     if (!(snap.metadata && snap.metadata.fromCache)) { maybePushEnter(); refreshPushOnce(); }
     if (!(people[u.uid] && people[u.uid].name)) show("nameBox");
     else {
       const firstShow = $("app").hidden;
       show("app");
-      if (firstShow) setView(view);
+      if (firstShow) { setView(view); setTimeout(() => locTick(true), 800); }
       else {
         render();
         // 대화 목록에 보이는 것(이름, 읽음 표시)이 바뀐 경우에만 다시 그림
@@ -1925,7 +1953,7 @@ function setView(v) {
   document.body.classList.toggle("chat-open", v === "chat");
   document.documentElement.classList.toggle("chat-open", v === "chat");
   if (v === "chat") { fitChat(); renderChat(true); markChatRead(); }
-  if (v === "together") { markTogetherRead(); renderTogether(); }
+  if (v === "together") { markTogetherRead(); renderTogether(); drawWhere(); }
   render();
 }
 document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.v)));
@@ -2544,6 +2572,114 @@ $("expandAll").addEventListener("click", () => {
   else items.forEach((l) => openIds.add(l.id));
   render();
 });
+// ================= 서로 어디쯤 (위치) =================
+// 각자 이 기기에서 "내 위치 보내기"를 켜야만 보내져요. 공책을 열어 보고 있는 동안에만 보내고, 끄면 바로 지워요.
+// people/{uid}.loc = { lat, lng, acc, place, at }   (위치는 약 10m 단위로만 저장)
+const LOC_KEY = "nb-loc-on", LOC_EVERY = 3 * 60000;
+let locWatch = null, locLastSent = null, locSending = false;
+const locWanted = () => { try { return localStorage.getItem(LOC_KEY) === "1"; } catch (e) { return false; } };
+function kmBetween(a, b) {
+  const R = 6371, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmtKm = (k) => k < 1 ? Math.max(10, Math.round(k * 1000 / 10) * 10) + "m" : k < 10 ? k.toFixed(1) + "km" : Math.round(k) + "km";
+// 동네 이름 (오픈스트리트맵 무료 주소 찾기) — 실패하면 이름 없이 보냄
+async function placeName(lat, lng) {
+  try {
+    const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=ko&lat=" + lat + "&lon=" + lng);
+    const j = await r.json(), a = j.address || {};
+    const parts = [a.city || a.county || a.state, a.borough || a.city_district || a.district, a.suburb || a.quarter || a.neighbourhood || a.village || a.town]
+      .filter((x, i, arr) => x && arr.indexOf(x) === i);
+    return parts.join(" ").slice(0, 60);
+  } catch (e) { return ""; }
+}
+async function sendLoc(pos, force) {
+  if (!me || locSending || !locWanted() || isLocked() || document.visibilityState !== "visible") return;
+  const c = pos.coords, now = Date.now();
+  const here = { lat: Math.round(c.latitude * 1e4) / 1e4, lng: Math.round(c.longitude * 1e4) / 1e4 };
+  // 많이 움직이지 않았으면 3분에 한 번만
+  if (!force && locLastSent && now - locLastSent.t < LOC_EVERY && kmBetween(locLastSent, here) < 0.1) return;
+  locSending = true;
+  try {
+    let place = locLastSent && kmBetween(locLastSent, here) < 0.3 ? locLastSent.place : null;
+    if (place == null) place = await placeName(here.lat, here.lng);
+    await setDoc(doc(db, "people", me.uid), { locOn: true, loc: { ...here, acc: Math.round(c.accuracy || 0), place, at: serverTimestamp() } }, { merge: true });
+    locLastSent = { ...here, place, t: now };
+  } catch (e) {} finally { locSending = false; }
+}
+function locError(e) {
+  if (e && e.code === 1) {   // 허락 안 함
+    try { localStorage.setItem(LOC_KEY, "0"); } catch (x) {}
+    stopLocWatch(); drawWhere();
+    toast("위치 사용을 허락하지 않아서 끌게요. 아이폰 설정 → 개인정보 보호 → 위치 서비스에서 바꿀 수 있어요.", 6000);
+  }
+}
+function stopLocWatch() { if (locWatch != null) { navigator.geolocation.clearWatch(locWatch); locWatch = null; } }
+// 공책을 보고 있는 동안만 위치를 지켜봄
+function locTick(force) {
+  if (!me || !navigator.geolocation) return;
+  if (!locWanted() || isLocked() || document.visibilityState !== "visible") { stopLocWatch(); return; }
+  if (force) navigator.geolocation.getCurrentPosition((p) => sendLoc(p, true), locError, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+  if (locWatch == null) locWatch = navigator.geolocation.watchPosition((p) => sendLoc(p, false), locError, { enableHighAccuracy: true, maximumAge: 60000 });
+}
+document.addEventListener("visibilitychange", () => locTick(document.visibilityState === "visible"));
+$("locOn").addEventListener("change", async () => {
+  const on = $("locOn").checked;
+  try { localStorage.setItem(LOC_KEY, on ? "1" : "0"); } catch (e) {}
+  if (on) {
+    if (!navigator.geolocation) { $("locOn").checked = false; toast("이 기기에서는 위치를 쓸 수 없어요."); return; }
+    toast("위치 사용을 물어보면 '허용'을 눌러 주세요", 3500);
+    locTick(true);
+  } else {
+    stopLocWatch(); locLastSent = null;
+    try { await setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }); toast("내 위치 보내기를 껐어요. 보냈던 위치도 지웠어요", 3500); }
+    catch (e) { toast(saveErr(e, "위치를 지우지"), 5000); }
+  }
+  drawWhere();
+});
+let whereMapKey = "";
+function drawWhere() {
+  if (!me) return;
+  const oid = otherId(), o = oid ? people[oid] : null, mine = myP();
+  const name = o ? o.name : "그분";
+  const on = locWanted();
+  $("locOn").checked = on;
+  const theirs = o && o.locOn && o.loc && o.loc.lat != null ? o.loc : null;
+  const myLoc = on && mine.loc && mine.loc.lat != null ? mine.loc : null;
+  const them = $("whereThem"); them.replaceChildren();
+  if (theirs) {
+    const t = theirs.at ? tms(theirs.at) : 0;
+    them.append(name + "님은 ");
+    const b = el("b", null, theirs.place || "지도에 표시된 곳"); them.append(b, "에 있어요");
+    const bits = [];
+    if (myLoc) bits.push("나와 약 " + fmtKm(kmBetween(myLoc, theirs)) + " 떨어져 있어요");
+    if (t) bits.push(ago(t) + " 위치" + (Date.now() - t > 30 * 60000 ? " (공책을 열면 새로 바뀌어요)" : ""));
+    if (bits.length) them.append(el("br"), el("span", "where-sub", bits.join(" · ")));
+    const key = theirs.lat + "," + theirs.lng;
+    if (key !== whereMapKey) {
+      whereMapKey = key;
+      const d = 0.012, f = document.createElement("iframe");
+      f.title = name + "님 위치 지도"; f.loading = "lazy";
+      f.src = "https://www.openstreetmap.org/export/embed.html?bbox=" + [theirs.lng - d, theirs.lat - d * 0.8, theirs.lng + d, theirs.lat + d * 0.8].join("%2C") + "&layer=mapnik&marker=" + theirs.lat + "%2C" + theirs.lng;
+      $("whereMap").replaceChildren(f);
+      $("whereKakao").href = "https://map.kakao.com/link/map/" + encodeURIComponent(name) + "," + theirs.lat + "," + theirs.lng;
+      $("whereApple").href = "https://maps.apple.com/?ll=" + theirs.lat + "," + theirs.lng + "&q=" + encodeURIComponent(name);
+    }
+    $("whereMap").hidden = false; $("whereLinks").hidden = false;
+  } else {
+    them.textContent = !(o && o.locOn)
+      ? name + "님이 아직 위치 보내기를 켜지 않았어요. " + name + "님 공책에서도 '내 위치 보내기'를 켜야 보여요."
+      : name + "님 위치를 기다리는 중이에요.";
+    $("whereMap").hidden = true; $("whereLinks").hidden = true; whereMapKey = "";
+    $("whereMap").replaceChildren();
+  }
+  $("whereMe").textContent = on
+    ? "내 위치가 " + name + "님께 보이고 있어요" + (myLoc && myLoc.at ? " · " + ago(tms(myLoc.at)) + " 보냄" : "") + ". 공책을 열어 둔 동안에만 보내져요."
+    : "켜면 공책을 열어 둔 동안 내 위치가 " + name + "님께 보여요. 끄면 보냈던 위치도 바로 지워져요.";
+}
+setInterval(() => { if (me && view === "together" && document.visibilityState === "visible") drawWhere(); }, 60000);
+
 function render() {
   if (!me) return;
 
