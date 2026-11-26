@@ -803,7 +803,7 @@ function checkComings() {
     const now = isHere(p), before = wasHere[id];
     if (presenceReady && before !== undefined && now !== before) {
       // 상대가 들어오면 안내 (나갈 때는 안내 없음)
-      if (now) alertPerson(p.name + "님이 공책에 들어왔어요");
+      // "들어왔어요" 안내는 띄우지 않음 (위쪽 초록 점 "지금 보고 있어요"만 보임)
     }
     wasHere[id] = now;
   }
