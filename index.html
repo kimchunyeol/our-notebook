@@ -2584,7 +2584,15 @@ $("expandAll").addEventListener("click", () => {
 // people/{uid}.loc = { lat, lng, acc, place, at }   (위치는 약 10m 단위로만 저장)
 const LOC_KEY = "nb-loc-on", LOC_EVERY = 60 * 60000;   // 열어 둔 동안 1시간마다
 let locWatch = null, locLastSent = null, locSending = false;
-const locWanted = () => { try { return localStorage.getItem(LOC_KEY) === "1"; } catch (e) { return false; } };
+// 이 기기에 켜고 끈 기록이 없는데(사파리가 오래된 기록을 지우기도 해요) 서버에는 "켜짐"이면, 휴대폰에서는 켜진 것으로 이어 감
+const locWanted = () => {
+  try {
+    const v = localStorage.getItem(LOC_KEY);
+    if (v === null && me && people[me.uid] && people[me.uid].locOn && matchMedia("(pointer: coarse)").matches) { localStorage.setItem(LOC_KEY, "1"); return true; }
+    return v === "1";
+  } catch (e) { return false; }
+};
+let locLastErr = "";
 function kmBetween(a, b) {
   const R = 6371, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
   const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
@@ -2616,10 +2624,12 @@ async function sendLoc(pos, force) {
     // 위치는 먼저 바로 보내고, 동네 이름은 찾는 대로 덧붙임
     if (place == null) { await save(""); place = await placeName(here.lat, here.lng); if (place) await save(place); }
     else await save(place);
-    locLastSent = { ...here, place, t: now };
+    locLastSent = { ...here, place, t: now }; locLastErr = "";
   } catch (e) {} finally { locSending = false; }
 }
 function locError(e) {
+  locLastErr = !e ? "" : e.code === 2 ? "지금 위치를 찾지 못했어요 (실내이거나 위치 서비스가 꺼져 있을 수 있어요)" : e.code === 3 ? "위치를 찾는 데 시간이 너무 걸렸어요" : "";
+  if (locLastErr) drawWhere();
   if (e && e.code === 1) {   // 허락 안 함
     try { localStorage.setItem(LOC_KEY, "0"); } catch (x) {}
     stopLocWatch(); drawWhere();
@@ -2688,7 +2698,7 @@ function drawWhere() {
     $("whereMap").replaceChildren();
   }
   $("whereMe").textContent = on
-    ? "내 위치가 " + name + "님께 보이고 있어요" + (myLoc && myLoc.at ? " · " + ago(tms(myLoc.at)) + " 보냄" : "") + ". 공책을 열 때, 그리고 열어 둔 동안 1시간마다 보내져요."
+    ? (locLastErr ? "⚠️ " + locLastErr + " · " : "") + "내 위치가 " + name + "님께 보이고 있어요" + (myLoc && myLoc.at ? " · " + ago(tms(myLoc.at)) + " 보냄" : "") + ". 공책을 열 때, 그리고 열어 둔 동안 1시간마다 보내져요."
     : "켜면 공책을 열어 둔 동안 내 위치가 " + name + "님께 보여요. 끄면 보냈던 위치도 바로 지워져요.";
 }
 setInterval(() => { if (me && view === "together" && document.visibilityState === "visible") drawWhere(); }, 60000);
