@@ -1924,8 +1924,8 @@ function maybePushEnter() {
   if (enterChecked || !me || document.visibilityState !== "visible" || !otherId() || isLocked()) return;
   enterChecked = true;
   let last = 0; try { last = Number(localStorage.getItem(LAST_KEY)) || 0; } catch (e) {}
-  // 10분 넘게 비웠다가 들어오면 상대 휴대폰에 알림
-  if (Date.now() - last > 10 * 60 * 1000) pushOther("enter");
+  // "들어왔어요" 휴대폰 알림(소리 나는 알림)은 보내지 않음 — 공책 안의 조용한 안내와 초록 점만 남김
+  void last;
   try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {}
 }
 function stampLastOpen() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} }
