@@ -359,8 +359,9 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 .chat-log > .empty { margin: auto 0; }
+.chat-bar textarea.tall { height: calc(4.2em + 18px); }
 .chat-bar textarea {
-  flex: 1; min-width: 0; resize: none; max-height: 8.5rem; overflow-y: hidden; transition: none; border: 1px solid var(--line); border-radius: 18px;
+  flex: 1; min-width: 0; resize: none; height: calc(1.4em + 18px); overflow-y: auto; transition: none; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 18px;
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
 }
 .chat-bar .primary { padding: 9px 16px; }
@@ -2212,32 +2213,16 @@ function renderChat(forceBottom) {
 // 입력 칸: 글 길이에 맞춰 늘어남, 컴퓨터에서는 Enter로 보내기(Shift+Enter 줄바꿈)
 const chatIn = $("chatIn");
 function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
-// 입력 칸 높이 재기용 보이지 않는 복사본 (진짜 칸을 줄였다 늘리면 대화 목록이 흔들려서)
-const chatGhost = chatIn.cloneNode(false);
-chatGhost.removeAttribute("id"); chatGhost.setAttribute("aria-hidden", "true"); chatGhost.tabIndex = -1;
-Object.assign(chatGhost.style, { position: "absolute", left: "-9999px", top: "0", height: "0", minHeight: "0", visibility: "hidden", pointerEvents: "none", overflow: "hidden" });
-chatIn.after(chatGhost);   // 같은 자리(대화 입력 줄 안)에 둬야 글꼴·여백이 똑같이 적용돼요
-const CHAT_IN_MAX = 136;
+// 입력 칸 높이: 글을 쓰는 동안에는 높이를 절대 바꾸지 않음 (줄이 바뀔 때마다 칸이 커지면 아이폰이 화면을 밀었다 당겨서 떨려요)
+// → 칸을 누르면(키보드가 올라올 때 함께) 3줄 높이로 한 번에 넓히고, 더 길면 칸 안에서 위아래로 넘겨 봐요.
+//   키보드를 내리면 글이 없을 때만 다시 1줄로.
 function growChatIn() {
-  const w = chatIn.offsetWidth; if (!w) return;
-  chatGhost.style.width = w + "px";
-  // 글자 두 개를 더 넣어 재요 → 줄이 넘어가기 "직전"에 미리 칸을 늘려서, 넘어가는 순간 글이 위로 밀리지 않게
-  chatGhost.value = chatIn.value + "가가";
-  const border = chatIn.offsetHeight - chatIn.clientHeight;
-  const want = Math.min(chatGhost.scrollHeight + border, CHAT_IN_MAX);
-  const atMax = want >= CHAT_IN_MAX;
-  // 다 커지기 전에는 칸 안에서 글이 위아래로 움직이지 않게
-  const ov = atMax ? "auto" : "hidden";
-  if (chatIn.style.overflowY !== ov) chatIn.style.overflowY = ov;
-  if (!atMax && chatIn.scrollTop) chatIn.scrollTop = 0;
-  if (Math.abs(chatIn.offsetHeight - want) < 2) return;          // 같은 높이면 손대지 않음
-  const log = $("chatLog");
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
-  chatIn.style.height = want + "px";
-  if (!atMax) chatIn.scrollTop = 0;
-  if (atBottom) log.scrollTop = log.scrollHeight;
+  const tall = document.activeElement === chatIn || !!chatIn.value;
+  chatIn.classList.toggle("tall", tall);
 }
-chatIn.addEventListener("input", () => { growChatIn(); chatCanSend(); sendTyping(!!chatIn.value.trim()); });
+chatIn.addEventListener("focus", growChatIn);
+chatIn.addEventListener("blur", () => setTimeout(growChatIn, 0));
+chatIn.addEventListener("input", () => { chatCanSend(); sendTyping(!!chatIn.value.trim()); });
 chatIn.addEventListener("blur", () => sendTyping(false));
 // ---- + 칸 열고 닫기 ----
 function openTray(open) {
@@ -2308,7 +2293,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   if (!me) return;
   const text = chatIn.value.trim(), photos = chatPending.slice();
   if (!text && !photos.length) return;
-  chatIn.value = ""; chatIn.style.height = ""; chatIn.style.overflowY = ""; chatIn.scrollTop = 0; chatPending = []; drawChatPending(); chatCanSend();
+  chatIn.value = ""; chatIn.scrollTop = 0; chatPending = []; drawChatPending(); chatCanSend();
   sendTyping(false);
   chatIn.focus();
   try {
