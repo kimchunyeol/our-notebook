@@ -2594,7 +2594,9 @@ const fmtKm = (k) => k < 1 ? Math.max(10, Math.round(k * 1000 / 10) * 10) + "m" 
 // 동네 이름 (오픈스트리트맵 무료 주소 찾기) — 실패하면 이름 없이 보냄
 async function placeName(lat, lng) {
   try {
-    const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=ko&lat=" + lat + "&lon=" + lng);
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 6000);   // 6초 넘게 걸리면 이름 없이
+    const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=ko&lat=" + lat + "&lon=" + lng, { signal: ctl.signal });
+    clearTimeout(to);
     const j = await r.json(), a = j.address || {};
     const parts = [a.city || a.county || a.state, a.borough || a.city_district || a.district, a.suburb || a.quarter || a.neighbourhood || a.village || a.town]
       .filter((x, i, arr) => x && arr.indexOf(x) === i);
@@ -2610,8 +2612,10 @@ async function sendLoc(pos, force) {
   locSending = true;
   try {
     let place = locLastSent && kmBetween(locLastSent, here) < 0.3 ? locLastSent.place : null;
-    if (place == null) place = await placeName(here.lat, here.lng);
-    await setDoc(doc(db, "people", me.uid), { locOn: true, loc: { ...here, acc: Math.round(c.accuracy || 0), place, at: serverTimestamp() } }, { merge: true });
+    const save = (pl) => setDoc(doc(db, "people", me.uid), { locOn: true, loc: { ...here, acc: Math.round(c.accuracy || 0), place: pl || "", at: serverTimestamp() } }, { merge: true });
+    // 위치는 먼저 바로 보내고, 동네 이름은 찾는 대로 덧붙임
+    if (place == null) { await save(""); place = await placeName(here.lat, here.lng); if (place) await save(place); }
+    else await save(place);
     locLastSent = { ...here, place, t: now };
   } catch (e) {} finally { locSending = false; }
 }
