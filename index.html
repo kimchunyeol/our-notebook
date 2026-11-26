@@ -2619,6 +2619,8 @@ function locError(e) {
   if (e && e.code === 1) {   // 허락 안 함
     try { localStorage.setItem(LOC_KEY, "0"); } catch (x) {}
     stopLocWatch(); drawWhere();
+    // 허락이 없으면 예전 위치가 "지금 위치"처럼 남지 않게 상대 화면에서도 꺼짐으로
+    if (me) setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }).catch(() => {});
     toast("위치 사용을 허락하지 않아서 끌게요. 아이폰 설정 → 개인정보 보호 → 위치 서비스에서 바꿀 수 있어요.", 6000);
   }
 }
