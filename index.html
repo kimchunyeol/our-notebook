@@ -383,7 +383,6 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
 .tray-ico svg { width: 24px; height: 24px; }
 .tray-photo { background: #4C9A6B; }
 .tray-mic { background: #D9774B; }
-.tray-loc { background: #4A7FC1; }
 .tray-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .tray-btn:focus-within .tray-ico, .tray-btn:focus-visible .tray-ico { outline: 2px solid var(--pen); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .chat-plus span { transition: none; } }
@@ -604,9 +603,6 @@ button.chat-photo { background: transparent; padding: 0; }
         </label>
         <button type="button" class="tray-btn" id="micBtn">
           <span class="tray-ico tray-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span>음성 메시지</span>
-        </button>
-        <button type="button" class="tray-btn" id="locBtn">
-          <span class="tray-ico tray-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span><span>위치</span>
         </button>
       </div>
     </section>
@@ -1210,15 +1206,17 @@ function startSession(u) {
 }
 // 대화는 최근 것부터 MSG_PAGE개씩 불러옴. 위로 올리면 더 불러옴 (대화 글은 지워지지 않고 그대로 있어요)
 const MSG_PAGE = 300;
-let msgLimit = MSG_PAGE, msgUnsub = null, moreLoading = false, keepAnchor = null;
+let msgLimit = MSG_PAGE, msgCount = 0, msgUnsub = null, moreLoading = false, keepAnchor = null;
 function subscribeMessages(u) {
   if (msgUnsub) msgUnsub();
   msgUnsub = onSnapshot(query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(msgLimit)), (snap) => {
-    msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse();
+    msgCount = snap.size;
+    // 예전 위치 카드(loc)는 대화창에 안 보이게 뺌
+    msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).filter((m) => !m.loc).reverse();
     if (!firstMsgs) {
       for (const c of snap.docChanges()) {
         const m = c.doc.data();
-        if (c.type === "added" && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
+        if (c.type === "added" && !m.loc && m.author !== u.uid && !c.doc.metadata.hasPendingWrites
             && (view !== "chat" || document.visibilityState !== "visible")) {
           alertPerson(nameOf(m.author) + ": " + (m.photoId ? "사진을 보냈어요" : m.loc ? "📍 위치 보내기를 " + (m.loc === "on" ? "켰어요" : "껐어요") : m.voiceId ? "🎤 음성 메시지 (" + fmtDur(m.dur || 0) + ")" : m.beep ? "📟 삐삐 " + m.beep + (BEEP_MEANS[m.beep] ? " (" + BEEP_MEANS[m.beep] + ")" : "") : (m.text || "").slice(0, 40)));
         }
@@ -2103,7 +2101,7 @@ async function markChatRead() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") markChatRead(); });
 
 function loadOlderMsgs() {
-  if (moreLoading || !me || msgs.length < msgLimit) return;
+  if (moreLoading || !me || msgCount < msgLimit) return;
   const log = $("chatLog");
   moreLoading = true;
   keepAnchor = { h: log.scrollHeight, t: log.scrollTop };
@@ -2116,7 +2114,7 @@ function loadOlderMsgs() {
 // 맨 위까지 올리면 저절로 더 불러옴
 $("chatLog").addEventListener("scroll", () => {
   const log = $("chatLog");
-  if (log.scrollTop < 60 && !moreLoading && msgs.length >= msgLimit) loadOlderMsgs();
+  if (log.scrollTop < 60 && !moreLoading && msgCount >= msgLimit) loadOlderMsgs();
 }, { passive: true });
 function renderChat(forceBottom) {
   if (!me) return;
@@ -2130,7 +2128,7 @@ function renderChat(forceBottom) {
     return;
   }
   // 맨 위: 더 예전 대화가 있으면 불러오기 버튼
-  if (msgs.length >= msgLimit) {
+  if (msgCount >= msgLimit) {
     const more = el("button", "load-more", moreLoading ? "예전 대화를 불러오는 중이에요…" : "↑ 예전 대화 더 보기");
     more.type = "button"; more.disabled = moreLoading;
     more.onclick = loadOlderMsgs;
@@ -2159,8 +2157,6 @@ function renderChat(forceBottom) {
       bubble = el("div", "bubble photo");
       const b = el("button", "pic"); b.type = "button"; b.dataset.pid = m.photoId; b.setAttribute("aria-label", "사진 크게 보기");
       bubble.append(b); fillPic(b); fetchPhoto(m.photoId);
-    } else if (m.loc) {
-      bubble = locBubble(m);
     } else if (m.voiceId) {
       bubble = voiceBubble(m);
     } else if (m.beep) {
@@ -2586,7 +2582,7 @@ $("expandAll").addEventListener("click", () => {
 // ================= 서로 어디쯤 (위치) =================
 // 각자 이 기기에서 "내 위치 보내기"를 켜야만 보내져요. 공책을 열어 보고 있는 동안에만 보내고, 끄면 바로 지워요.
 // people/{uid}.loc = { lat, lng, acc, place, at }   (위치는 약 10m 단위로만 저장)
-const LOC_KEY = "nb-loc-on", LOC_EVERY = 3 * 60000;
+const LOC_KEY = "nb-loc-on", LOC_EVERY = 60 * 60000;   // 열어 둔 동안 1시간마다
 let locWatch = null, locLastSent = null, locSending = false;
 const locWanted = () => { try { return localStorage.getItem(LOC_KEY) === "1"; } catch (e) { return false; } };
 function kmBetween(a, b) {
@@ -2609,8 +2605,8 @@ async function sendLoc(pos, force) {
   if (!me || locSending || !locWanted() || isLocked() || document.visibilityState !== "visible") return;
   const c = pos.coords, now = Date.now();
   const here = { lat: Math.round(c.latitude * 1e4) / 1e4, lng: Math.round(c.longitude * 1e4) / 1e4 };
-  // 많이 움직이지 않았으면 3분에 한 번만
-  if (!force && locLastSent && now - locLastSent.t < LOC_EVERY && kmBetween(locLastSent, here) < 0.1) return;
+  // 공책을 열 때 한 번, 그다음은 1시간마다
+  if (!force && locLastSent && now - locLastSent.t < LOC_EVERY) return;
   locSending = true;
   try {
     let place = locLastSent && kmBetween(locLastSent, here) < 0.3 ? locLastSent.place : null;
@@ -2642,43 +2638,12 @@ $("locOn").addEventListener("change", async () => {
     if (!navigator.geolocation) { $("locOn").checked = false; toast("이 기기에서는 위치를 쓸 수 없어요."); return; }
     toast("위치 사용을 물어보면 '허용'을 눌러 주세요", 3500);
     locTick(true);
-    postLocMsg("on");
   } else {
     stopLocWatch(); locLastSent = null;
-    try { await setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }); toast("내 위치 보내기를 껐어요. 보냈던 위치도 지웠어요", 3500); postLocMsg("off"); }
+    try { await setDoc(doc(db, "people", me.uid), { locOn: false, loc: null }, { merge: true }); toast("내 위치 보내기를 껐어요. 보냈던 위치도 지웠어요", 3500); }
     catch (e) { toast(saveErr(e, "위치를 지우지"), 5000); }
   }
   drawWhere();
-});
-// 켜고 끈 것을 대화창에도 카드로 남김
-async function postLocMsg(state) {
-  if (!me) return;
-  try {
-    await addDoc(collection(db, "messages"), { author: me.uid, loc: state, createdAt: serverTimestamp() });
-    pushOther("msg", state === "on" ? "📍 내 위치 보내기를 켰어요" : "📍 내 위치 보내기를 껐어요");
-  } catch (e) {}
-}
-// 대화 속 위치 카드: 그 사람이 지금 보내는 위치를 실시간으로 보여 줌
-function locBubble(m) {
-  const p = people[m.author] || {};
-  const live = m.loc === "on" && p.locOn && p.loc && p.loc.lat != null ? p.loc : null;
-  const b = el("button", "bubble loc-card"); b.type = "button";
-  b.append(el("span", "loc-ico", "📍"));
-  const txt = el("span", "loc-txt");
-  txt.append(el("b", null, m.loc === "on" ? "위치 보내기를 켰어요" : "위치 보내기를 껐어요"));
-  if (m.loc === "on") txt.append(el("span", null, live ? (live.place || "위치 보는 중") + (live.at ? " · " + ago(tms(live.at)) : "") : "지금은 꺼져 있어요"));
-  if (live) txt.append(el("span", "loc-go", "지도 보기 ›"));
-  b.append(txt);
-  b.onclick = () => { setView("together"); window.scrollTo(0, 0); };
-  return b;
-}
-// 대화창 + 칸의 "위치" 버튼: 꺼져 있으면 켜고, 켜져 있으면 지금 위치를 카드로 한 번 더 보냄
-$("locBtn").addEventListener("click", () => {
-  openTray(false);
-  if (!locWanted()) { $("locOn").checked = true; $("locOn").dispatchEvent(new Event("change")); return; }
-  locTick(true);
-  postLocMsg("on");
-  toast("지금 위치를 보냈어요", 2500);
 });
 let whereMapKey = "";
 function drawWhere() {
@@ -2717,7 +2682,7 @@ function drawWhere() {
     $("whereMap").replaceChildren();
   }
   $("whereMe").textContent = on
-    ? "내 위치가 " + name + "님께 보이고 있어요" + (myLoc && myLoc.at ? " · " + ago(tms(myLoc.at)) + " 보냄" : "") + ". 공책을 열어 둔 동안에만 보내져요."
+    ? "내 위치가 " + name + "님께 보이고 있어요" + (myLoc && myLoc.at ? " · " + ago(tms(myLoc.at)) + " 보냄" : "") + ". 공책을 열 때, 그리고 열어 둔 동안 1시간마다 보내져요."
     : "켜면 공책을 열어 둔 동안 내 위치가 " + name + "님께 보여요. 끄면 보냈던 위치도 바로 지워져요.";
 }
 setInterval(() => { if (me && view === "together" && document.visibilityState === "visible") drawWhere(); }, 60000);
