@@ -1440,7 +1440,8 @@ function pushOther(kind, text, where) {
   }[kind] || "새 소식이 있어요";
   // 내용 미리 보기는 메시지·글·답글만 (타임캡슐은 절대 안 보임)
   const showText = prefs.preview && text && ["msg", "letter", "reply"].includes(kind);
-  const body = showText ? String(text).slice(0, 120) : myName + "님이 " + what;
+  // 대화 메시지는 누가 보냈다는 말 없이 "메시지 도착"만
+  const body = showText ? String(text).slice(0, 120) : kind === "msg" ? "메시지 도착" : myName + "님이 " + what;
   const tag = { msg: "speech_balloon", voice: "microphone", beep: "pager", letter: "notebook", capsule: "love_letter",
                 reply: "speech_balloon", wish: "star", wishdone: "white_check_mark", enter: "wave", react: "heart", mood: "sunny" }[kind];
   // 알림을 누르면 그 화면으로 바로 열림
