@@ -359,7 +359,7 @@ a.link { color: var(--pen); text-decoration: underline; text-underline-offset: 2
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 .chat-log > .empty { margin: auto 0; }
-.chat-bar textarea.tall { height: calc(4.2em + 18px); }
+.chat-bar textarea.tall { height: calc(2.8em + 18px); }
 .chat-bar textarea {
   flex: 1; min-width: 0; resize: none; height: calc(1.4em + 18px); overflow-y: auto; transition: none; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 18px;
   background: var(--paper); color: var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-size: 1rem; line-height: 1.4;
@@ -2214,7 +2214,7 @@ function renderChat(forceBottom) {
 const chatIn = $("chatIn");
 function chatCanSend() { $("chatSend").disabled = !chatIn.value.trim() && chatPending.length === 0; }
 // 입력 칸 높이: 글을 쓰는 동안에는 높이를 절대 바꾸지 않음 (줄이 바뀔 때마다 칸이 커지면 아이폰이 화면을 밀었다 당겨서 떨려요)
-// → 칸을 누르면(키보드가 올라올 때 함께) 3줄 높이로 한 번에 넓히고, 더 길면 칸 안에서 위아래로 넘겨 봐요.
+// → 칸을 누르면(키보드가 올라올 때 함께) 2줄 높이로 한 번에 넓히고, 더 길면 칸 안에서 위아래로 넘겨 봐요.
 //   키보드를 내리면 글이 없을 때만 다시 1줄로.
 function growChatIn() {
   const tall = document.activeElement === chatIn || !!chatIn.value;
